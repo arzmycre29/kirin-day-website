@@ -388,8 +388,8 @@ export function HomePage({ onNavigate }: HomePageProps) {
                       </p>
                     </div>
 
-                    {/* Cover Art - Hidden on mobile, visible on tablet and up */}
-                    <div className="hidden sm:block flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden border-2 border-white/10 group-hover:border-[#90CDF4]/30 transition-all duration-300">
+                    {/* Cover Art */}
+                    <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-lg overflow-hidden border-2 border-white/10 group-hover:border-[#90CDF4]/30 transition-all duration-300">
                       <img
                         src={track.coverArt}
                         alt={track.title}
