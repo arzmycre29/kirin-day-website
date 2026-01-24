@@ -291,7 +291,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
             <div className="relative">
               <div className="rounded-xl overflow-hidden border-4 border-[#90CDF4]/30 shadow-2xl shadow-[#90CDF4]/20">
                 <img
-                  src="https://images.unsplash.com/photo-1729915342948-bf4dd5280ce7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxqYXBhbmVzZSUyMGlkb2wlMjBjb25jZXJ0fGVufDF8fHx8MTc2ODk4ODAzNnww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
+                  src={pageContent['about-intro']?.image || "https://images.unsplash.com/photo-1729915342948-bf4dd5280ce7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxqYXBhbmVzZSUyMGlkb2wlMjBjb25jZXJ0fGVufDF8fHx8MTc2ODk4ODAzNnww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"}
                   alt="Kirin Day Members"
                   className="w-full h-auto"
                 />
@@ -363,26 +363,38 @@ export function HomePage({ onNavigate }: HomePageProps) {
                 <div
                   key={track.id || index}
                   onClick={() => handleMusicClick(track.id)}
-                  className="group p-8 rounded-xl border border-white/10 hover:border-[#90CDF4]/30 transition-all duration-300 cursor-pointer hover:scale-105"
+                  className="group p-6 md:p-8 rounded-xl border border-white/10 hover:border-[#90CDF4]/30 transition-all duration-300 cursor-pointer hover:scale-105"
                   style={{ background: 'rgba(255, 255, 255, 0.02)' }}
                 >
-                  <div className="flex items-start gap-6">
+                  <div className="flex items-center gap-4 md:gap-6">
+                    {/* Play Button */}
                     <button
                       onClick={(e) => handlePlayClick(e, track)}
-                      className="flex-shrink-0 w-16 h-16 rounded-full bg-[#90CDF4]/20 border-2 border-[#90CDF4] flex items-center justify-center hover:scale-110 hover:bg-[#F6E05E] hover:border-[#F6E05E] transition-all duration-300"
+                      className="flex-shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-full bg-[#90CDF4]/20 border-2 border-[#90CDF4] flex items-center justify-center hover:scale-110 hover:bg-[#F6E05E] hover:border-[#F6E05E] transition-all duration-300"
                     >
-                      <Play className="w-7 h-7 text-[#90CDF4] group-hover:text-[#1a2f47] ml-1" />
+                      <Play className="w-5 h-5 md:w-7 md:h-7 text-[#90CDF4] group-hover:text-[#1a2f47] ml-1" />
                     </button>
-                    <div className="flex-1">
-                      <div className="inline-block px-3 py-1 rounded-md bg-[#F6E05E]/10 border border-[#F6E05E]/20 text-xs font-bold text-[#F6E05E] mb-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+
+                    {/* Track Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="inline-block px-3 py-1 rounded-md bg-[#F6E05E]/10 border border-[#F6E05E]/20 text-xs font-bold text-[#F6E05E] mb-2 md:mb-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                         {track.type}
                       </div>
-                      <h4 className="text-xl font-black text-white mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      <h4 className="text-lg md:text-xl font-black text-white mb-1 md:mb-2 truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                         {track.title}
                       </h4>
-                      <p className="text-sm text-white/60" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      <p className="text-xs md:text-sm text-white/60" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                         Kirin Day • {track.date}
                       </p>
+                    </div>
+
+                    {/* Cover Art - Hidden on mobile, visible on tablet and up */}
+                    <div className="hidden sm:block flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden border-2 border-white/10 group-hover:border-[#90CDF4]/30 transition-all duration-300">
+                      <img
+                        src={track.coverArt}
+                        alt={track.title}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
                     </div>
                   </div>
                 </div>
