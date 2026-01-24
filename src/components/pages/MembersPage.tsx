@@ -40,13 +40,21 @@ export function MembersPage() {
           rawDescription: item.fields.description
         }));
 
-        // Sort: Captain first, then alphabetically by name
-        formattedMembers.sort((a: any, b: any) => {
-          const aIsCaptain = a.role?.toLowerCase().includes('captain');
-          const bIsCaptain = b.role?.toLowerCase().includes('captain');
+        // Sort by role hierarchy: Captain > Member > Interim Member, then alphabetically
+        const roleOrder: Record<string, number> = {
+          'captain': 1,
+          'member': 2,
+          'interim member': 3
+        };
 
-          if (aIsCaptain && !bIsCaptain) return -1;
-          if (!aIsCaptain && bIsCaptain) return 1;
+        formattedMembers.sort((a: any, b: any) => {
+          const aRole = a.role?.toLowerCase() || '';
+          const bRole = b.role?.toLowerCase() || '';
+
+          const aOrder = roleOrder[aRole] || 99;
+          const bOrder = roleOrder[bRole] || 99;
+
+          if (aOrder !== bOrder) return aOrder - bOrder;
           return a.name.localeCompare(b.name);
         });
 

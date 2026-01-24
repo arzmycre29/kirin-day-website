@@ -1,4 +1,4 @@
-import { X, Instagram } from 'lucide-react';
+import { X, Instagram, Youtube } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface Member {
@@ -6,8 +6,9 @@ interface Member {
   role: string;
   image: string;
   funFact: string;
-  instagramHandle: string;
-  twitterHandle: string;
+  instagram?: string;
+  twitter?: string;
+  youtube?: string;
   isSupport?: boolean;
   supportLabel?: string;
 }
@@ -68,7 +69,7 @@ export function MemberModal({ member, isOpen, onClose }: MemberModalProps) {
                 <div className="w-full md:w-1/2 p-6 pb-8 md:p-12 flex flex-col min-h-0">
                   {/* Support Badge */}
                   {member.isSupport && member.supportLabel && (
-                    <div 
+                    <div
                       className="inline-block px-4 py-2 rounded-lg border-2 border-[#90CDF4] mb-6 self-start"
                       style={{ background: 'rgba(144, 205, 244, 0.1)' }}
                     >
@@ -79,9 +80,9 @@ export function MemberModal({ member, isOpen, onClose }: MemberModalProps) {
                   )}
 
                   {/* Stage Name */}
-                  <h2 
+                  <h2
                     className="text-4xl md:text-5xl font-black text-[#90CDF4] mb-3"
-                    style={{ 
+                    style={{
                       fontFamily: 'Montserrat, sans-serif',
                       textShadow: '0 0 30px rgba(144, 205, 244, 0.3)'
                     }}
@@ -119,36 +120,60 @@ export function MemberModal({ member, isOpen, onClose }: MemberModalProps) {
                     </p>
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                       {/* Instagram */}
-                      <a
-                        href={`https://instagram.com/${member.instagramHandle}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 px-4 py-3 bg-[#90CDF4]/10 hover:bg-[#90CDF4]/20 border-2 border-[#90CDF4]/30 hover:border-[#90CDF4] rounded-lg transition-all duration-200 group"
-                      >
-                        <Instagram className="w-5 h-5 text-[#90CDF4] flex-shrink-0" />
-                        <span className="text-sm font-bold text-[#90CDF4] truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                          @{member.instagramHandle}
-                        </span>
-                      </a>
+                      {member.instagram && (
+                        <a
+                          href={`https://instagram.com/${member.instagram.replace('@', '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 px-4 py-3 bg-[#90CDF4]/10 hover:bg-[#90CDF4]/20 border-2 border-[#90CDF4]/30 hover:border-[#90CDF4] rounded-lg transition-all duration-200 group"
+                        >
+                          <Instagram className="w-5 h-5 text-[#90CDF4] flex-shrink-0" />
+                          <span className="text-sm font-bold text-[#90CDF4] truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                            @{member.instagram.replace('@', '')}
+                          </span>
+                        </a>
+                      )}
 
                       {/* X (Twitter) */}
-                      <a
-                        href={`https://x.com/${member.twitterHandle}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 px-4 py-3 bg-[#90CDF4]/10 hover:bg-[#90CDF4]/20 border-2 border-[#90CDF4]/30 hover:border-[#90CDF4] rounded-lg transition-all duration-200 group"
-                      >
-                        <svg 
-                          className="w-5 h-5 text-[#90CDF4] flex-shrink-0" 
-                          viewBox="0 0 24 24" 
-                          fill="currentColor"
+                      {member.twitter && (
+                        <a
+                          href={`https://twitter.com/${member.twitter.replace('@', '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 px-4 py-3 bg-[#90CDF4]/10 hover:bg-[#90CDF4]/20 border-2 border-[#90CDF4]/30 hover:border-[#90CDF4] rounded-lg transition-all duration-200 group"
                         >
-                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                        </svg>
-                        <span className="text-sm font-bold text-[#90CDF4] truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                          @{member.twitterHandle}
-                        </span>
-                      </a>
+                          <svg
+                            className="w-5 h-5 text-[#90CDF4] flex-shrink-0"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                          >
+                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                          </svg>
+                          <span className="text-sm font-bold text-[#90CDF4] truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                            @{member.twitter.replace('@', '')}
+                          </span>
+                        </a>
+                      )}
+
+                      {/* YouTube */}
+                      {member.youtube && (
+                        <a
+                          href={member.youtube.startsWith('http') ? member.youtube : `https://youtube.com/${member.youtube}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 px-4 py-3 bg-[#90CDF4]/10 hover:bg-[#90CDF4]/20 border-2 border-[#90CDF4]/30 hover:border-[#90CDF4] rounded-lg transition-all duration-200 group"
+                        >
+                          <Youtube className="w-5 h-5 text-[#90CDF4] flex-shrink-0" />
+                          <span className="text-sm font-bold text-[#90CDF4] truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                            YouTube
+                          </span>
+                        </a>
+                      )}
+
+                      {/* No social media message */}
+                      {!member.instagram && !member.twitter && !member.youtube && (
+                        <span className="text-sm text-white/40">No social media available</span>
+                      )}
                     </div>
                   </div>
                 </div>
