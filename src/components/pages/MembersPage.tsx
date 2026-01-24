@@ -33,12 +33,22 @@ export function MembersPage() {
           isSupport: item.fields.isSupport || false,
           supportLabel: item.fields.supportLabel || '',
           color: item.fields.color || '#90CDF4',
-          funFact: item.fields.description?.content?.[0]?.content?.[0]?.value || 'No fun fact available.', // Simple text extraction for now
-          instagramHandle: item.fields.instagram || '',
-          twitterHandle: item.fields.twitter || '',
-          // Store raw rich text for Modal if needed
+          funFact: item.fields.description?.content?.[0]?.content?.[0]?.value || 'No fun fact available.',
+          instagram: item.fields.instagram || '',
+          twitter: item.fields.twitter || '',
+          youtube: item.fields.youtube || '',
           rawDescription: item.fields.description
         }));
+
+        // Sort: Captain first, then alphabetically by name
+        formattedMembers.sort((a: any, b: any) => {
+          const aIsCaptain = a.role?.toLowerCase().includes('captain');
+          const bIsCaptain = b.role?.toLowerCase().includes('captain');
+
+          if (aIsCaptain && !bIsCaptain) return -1;
+          if (!aIsCaptain && bIsCaptain) return 1;
+          return a.name.localeCompare(b.name);
+        });
 
         setMembers(formattedMembers);
         setLoading(false);
@@ -171,25 +181,43 @@ export function MembersPage() {
                 </p>
 
                 {/* Social Icons */}
-                <div className="flex items-center gap-3">
-                  <button
-                    className="flex-1 p-3 rounded-lg bg-white/5 hover:bg-[#90CDF4]/20 border border-white/10 hover:border-[#90CDF4]/30 transition-all group/btn"
-                    aria-label="Instagram"
-                  >
-                    <Instagram className="w-5 h-5 text-white/60 group-hover/btn:text-[#90CDF4] mx-auto transition-colors" />
-                  </button>
-                  <button
-                    className="flex-1 p-3 rounded-lg bg-white/5 hover:bg-[#90CDF4]/20 border border-white/10 hover:border-[#90CDF4]/30 transition-all group/btn"
-                    aria-label="Twitter"
-                  >
-                    <Twitter className="w-5 h-5 text-white/60 group-hover/btn:text-[#90CDF4] mx-auto transition-colors" />
-                  </button>
-                  <button
-                    className="flex-1 p-3 rounded-lg bg-white/5 hover:bg-[#90CDF4]/20 border border-white/10 hover:border-[#90CDF4]/30 transition-all group/btn"
-                    aria-label="YouTube"
-                  >
-                    <Youtube className="w-5 h-5 text-white/60 group-hover/btn:text-[#90CDF4] mx-auto transition-colors" />
-                  </button>
+                <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                  {member.instagram && (
+                    <a
+                      href={`https://instagram.com/${member.instagram.replace('@', '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 p-3 rounded-lg bg-white/5 hover:bg-[#90CDF4]/20 border border-white/10 hover:border-[#90CDF4]/30 transition-all group/btn"
+                      aria-label="Instagram"
+                    >
+                      <Instagram className="w-5 h-5 text-white/60 group-hover/btn:text-[#90CDF4] mx-auto transition-colors" />
+                    </a>
+                  )}
+                  {member.twitter && (
+                    <a
+                      href={`https://twitter.com/${member.twitter.replace('@', '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 p-3 rounded-lg bg-white/5 hover:bg-[#90CDF4]/20 border border-white/10 hover:border-[#90CDF4]/30 transition-all group/btn"
+                      aria-label="Twitter"
+                    >
+                      <Twitter className="w-5 h-5 text-white/60 group-hover/btn:text-[#90CDF4] mx-auto transition-colors" />
+                    </a>
+                  )}
+                  {member.youtube && (
+                    <a
+                      href={member.youtube.startsWith('http') ? member.youtube : `https://youtube.com/${member.youtube}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 p-3 rounded-lg bg-white/5 hover:bg-[#90CDF4]/20 border border-white/10 hover:border-[#90CDF4]/30 transition-all group/btn"
+                      aria-label="YouTube"
+                    >
+                      <Youtube className="w-5 h-5 text-white/60 group-hover/btn:text-[#90CDF4] mx-auto transition-colors" />
+                    </a>
+                  )}
+                  {!member.instagram && !member.twitter && !member.youtube && (
+                    <span className="text-xs text-white/40">No social media</span>
+                  )}
                 </div>
               </div>
 
