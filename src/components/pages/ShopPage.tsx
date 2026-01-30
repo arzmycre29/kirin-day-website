@@ -107,32 +107,14 @@ export function ShopPage() {
               key={category}
               onClick={() => setActiveCategory(category)}
               className={`px-8 py-3 rounded-full font-black transition-all duration-300 border-2 ${activeCategory === category
-                  ? 'bg-[#90CDF4] text-[#1a2f47] border-[#90CDF4] shadow-lg shadow-[#90CDF4]/30'
-                  : 'bg-transparent text-white/70 border-white/20 hover:border-[#90CDF4]/50 hover:text-white'
+                ? 'bg-[#90CDF4] text-[#1a2f47] border-[#90CDF4] shadow-lg shadow-[#90CDF4]/30'
+                : 'bg-transparent text-white/70 border-white/20 hover:border-[#90CDF4]/50 hover:text-white'
                 }`}
               style={{ fontFamily: 'Montserrat, sans-serif' }}
             >
               {category}
             </button>
           ))}
-        </div>
-
-        {/* Info Banner */}
-        <div
-          className="mb-16 p-6 rounded-xl border-2 border-[#F6E05E]/30"
-          style={{ background: 'rgba(246, 224, 94, 0.05)' }}
-        >
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
-            <div className="flex items-center gap-3">
-              <Package className="w-6 h-6 text-[#F6E05E]" />
-              <p className="text-white/80 font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                Free shipping for orders over Rp 300,000
-              </p>
-            </div>
-            <div className="text-sm text-white/60" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              Official merchandise only • Authentic quality guaranteed
-            </div>
-          </div>
         </div>
 
         {/* Empty State */}
@@ -214,8 +196,8 @@ export function ShopPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className={`w-full px-6 py-4 rounded-full font-black transition-all duration-300 flex items-center justify-center gap-2 ${product.inStock
-                      ? 'bg-[#F6E05E] text-[#1a2f47] hover:scale-105 hover:shadow-xl hover:shadow-[#F6E05E]/30'
-                      : 'bg-white/10 text-white/40 cursor-not-allowed'
+                    ? 'bg-[#F6E05E] text-[#1a2f47] hover:scale-105 hover:shadow-xl hover:shadow-[#F6E05E]/30'
+                    : 'bg-white/10 text-white/40 cursor-not-allowed'
                     }`}
                   style={{ fontFamily: 'Montserrat, sans-serif' }}
                   onClick={(e) => !product.inStock && e.preventDefault()}
