@@ -199,7 +199,7 @@ export function MediaPage() {
                 {(activeTab === 'all' || activeTab === 'videos') && videos.length > 0 && (
                     <div className="mb-24">
                         <div className="flex items-center gap-3 mb-8">
-                            <Video as VideoIcon className="w-6 h-6 text-[#90CDF4]" />
+                            <VideoIcon className="w-6 h-6 text-[#90CDF4]" />
                             <h3 className="text-2xl font-black text-white" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                                 VIDEOS
                             </h3>
