@@ -1,6 +1,7 @@
 import { Sparkles, Play, Calendar, Music, Image as ImageIcon, Video } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAudio } from '../../context/AudioContext';
+import { HeroSection } from '../HeroSection';
 
 // Fallback image for mascot
 const kirinMascot = "https://via.placeholder.com/150/F6E05E/1a2f47?text=Kirin+Day";
@@ -174,83 +175,8 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
-        {/* Background Image */}
-        <div className="absolute inset-0">
-          <img
-            src="https://images.unsplash.com/photo-1566477712363-3c75dd39b416?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxpZG9sJTIwZ3JvdXAlMjBwZXJmb3JtYW5jZSUyMHN0YWdlfGVufDF8fHx8MTc2ODk4ODAzNXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-            alt="Kirin Day Performance"
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-[#1a2f47]/90" />
-        </div>
-
-        {/* Subtle Striped Pattern Overlay */}
-        <div
-          className="absolute inset-0 opacity-5"
-          style={{
-            backgroundImage: `repeating-linear-gradient(
-              45deg,
-              transparent,
-              transparent 10px,
-              rgba(246, 224, 94, 0.1) 10px,
-              rgba(246, 224, 94, 0.1) 20px
-            )`
-          }}
-        />
-
-        {/* Content */}
-        <div className="relative z-10 text-center px-6 max-w-6xl mx-auto">
-          {/* Logo */}
-          <div className="flex justify-center mb-8">
-            <div className="w-32 h-32 rounded-full overflow-hidden bg-[#F6E05E]/10 p-1.5 border-4 border-[#F6E05E]/30">
-              <img
-                src={pageContent['site-logo']?.image || kirinMascot}
-                alt="Kirin Day"
-                className="w-full h-full object-cover rounded-full"
-              />
-            </div>
-          </div>
-
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#F6E05E]/30 mb-12" style={{ background: 'rgba(246, 224, 94, 0.05)' }}>
-            <Sparkles className="w-4 h-4 text-[#F6E05E]" />
-            <span className="text-xs tracking-widest text-[#FFFCE0]/90 font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              JAPANESE-STYLE IDOL GROUP • BANDUNG
-            </span>
-          </div>
-
-          <h1 className="mb-8 tracking-tight">
-            <div className="text-6xl md:text-8xl lg:text-9xl font-black text-[#90CDF4] mb-3" style={{ fontFamily: 'Montserrat, sans-serif', textShadow: '0 0 40px rgba(144, 205, 244, 0.3)' }}>
-              {/* Dynamic Title if present, else fallback */}
-              KIRIN DAY
-            </div>
-            <div className="text-5xl md:text-7xl lg:text-8xl font-black text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif', textShadow: '0 0 40px rgba(144, 205, 244, 0.3)' }}>
-              {/* Dynamic Slogan if present, else fallback */}
-              TENKAICHI MORIAGARI
-            </div>
-          </h1>
-
-          {/* Dynamic Hero Description */}
-          {pageContent['homepage-hero'] ? (
-            <p className="text-base text-white/70 mb-16 max-w-xl mx-auto leading-relaxed" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              {pageContent['homepage-hero'].content}
-            </p>
-          ) : (
-            <p className="text-base text-white/70 mb-16 max-w-xl mx-auto leading-relaxed" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              Experience the ultimate high-energy performance from Bandung's premier Japanese-style local idol group
-            </p>
-          )}
-
-          <button
-            onClick={() => onNavigate('music')}
-            className="group relative px-10 py-4 text-base font-black text-[#1a2f47] bg-[#F6E05E] rounded-full transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-[#F6E05E]/30"
-            style={{ fontFamily: 'Montserrat, sans-serif' }}
-          >
-            STREAM LATEST SINGLE
-          </button>
-        </div>
-      </section>
+      {/* Hero Section - Using Component */}
+      <HeroSection onStreamClick={() => onNavigate('music')} />
 
       {/* Introduction Section */}
       <section className="py-32 px-6 bg-[#1a2f47]">
