@@ -19,6 +19,7 @@ interface AudioContextType {
     playTrack: (track: Track) => void;
     togglePlay: () => void;
     pause: () => void;
+    stopTrack: () => void;
     seek: (percent: number) => void;
     setVolume: (vol: number) => void;
 }
@@ -127,6 +128,19 @@ export function AudioProvider({ children }: AudioProviderProps) {
         }
     };
 
+    const stopTrack = () => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            audioRef.current.src = '';
+        }
+        setCurrentTrack(null);
+        setIsPlaying(false);
+        setProgress(0);
+        setCurrentTime(0);
+        setDuration(0);
+    };
+
     const seek = (percent: number) => {
         if (!audioRef.current || !duration) return;
         const newTime = (percent / 100) * duration;
@@ -153,6 +167,7 @@ export function AudioProvider({ children }: AudioProviderProps) {
             playTrack,
             togglePlay,
             pause,
+            stopTrack,
             seek,
             setVolume,
         }}>

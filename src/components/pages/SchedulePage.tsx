@@ -25,6 +25,14 @@ export function SchedulePage({ targetId }: SchedulePageProps) {
           const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
           const dayNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 
+          // Extract attending members from reference field
+          const attendingMembers = item.fields.attendingMembers?.map((member: any) => ({
+            name: member.fields?.name || 'Unknown',
+            photo: member.fields?.photo?.fields?.file?.url
+              ? `https:${member.fields.photo.fields.file.url}`
+              : null
+          })) || [];
+
           return {
             id: item.sys.id, // ID needed for deep linking
             date: dateObj.getDate().toString(),
@@ -38,7 +46,9 @@ export function SchedulePage({ targetId }: SchedulePageProps) {
             duration: 'TBA',
             ticketStatus: item.fields.ticketStatus || 'Coming Soon',
             ticketPrice: item.fields.ticketPrice || 'TBA',
-            capacity: 'TBA',
+            ticketUrl: item.fields.ticketUrl || '',
+            ticketEnabled: item.fields.ticketEnabled ?? true, // Default to true if not set
+            attendingMembers,
             type: item.fields.type || 'Event'
           };
         });
@@ -109,48 +119,6 @@ export function SchedulePage({ targetId }: SchedulePageProps) {
           <p className="text-xl text-white/70 max-w-2xl mx-auto leading-relaxed" style={{ fontFamily: 'Montserrat, sans-serif' }}>
             Upcoming Performances at Istana BEC • Don't miss out on our high-energy shows and special events
           </p>
-        </div>
-
-        {/* Info Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-          <div
-            className="p-6 rounded-xl border border-white/10 text-center"
-            style={{ background: 'rgba(255, 255, 255, 0.02)' }}
-          >
-            <TrendingUp className="w-8 h-8 text-[#F6E05E] mx-auto mb-3" />
-            <div className="text-2xl font-black text-white mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              {events.length}
-            </div>
-            <p className="text-sm text-white/60" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              Upcoming Events
-            </p>
-          </div>
-
-          <div
-            className="p-6 rounded-xl border border-white/10 text-center"
-            style={{ background: 'rgba(255, 255, 255, 0.02)' }}
-          >
-            <MapPin className="w-8 h-8 text-[#F6E05E] mx-auto mb-3" />
-            <div className="text-2xl font-black text-white mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              Istana BEC
-            </div>
-            <p className="text-sm text-white/60" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              Main Venue
-            </p>
-          </div>
-
-          <div
-            className="p-6 rounded-xl border border-white/10 text-center"
-            style={{ background: 'rgba(255, 255, 255, 0.02)' }}
-          >
-            <Users className="w-8 h-8 text-[#F6E05E] mx-auto mb-3" />
-            <div className="text-2xl font-black text-white mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              5,000+
-            </div>
-            <p className="text-sm text-white/60" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              Total Attendees
-            </p>
-          </div>
         </div>
 
         {/* Events Grid */}
@@ -253,23 +221,66 @@ export function SchedulePage({ targetId }: SchedulePageProps) {
 
                         <div className="h-8 w-px bg-white/10" />
 
+                        {/* Attending Members */}
                         <div className="flex items-center gap-2">
                           <Users className="w-5 h-5 text-[#90CDF4]" />
-                          <span className="text-sm text-white/60" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                            {event.capacity}
-                          </span>
+                          {event.attendingMembers && event.attendingMembers.length > 0 ? (
+                            <div className="flex items-center gap-1">
+                              {/* Member avatars - show up to 3 */}
+                              <div className="flex -space-x-2">
+                                {event.attendingMembers.slice(0, 3).map((member: any, idx: number) => (
+                                  member.photo ? (
+                                    <img
+                                      key={idx}
+                                      src={member.photo}
+                                      alt={member.name}
+                                      className="w-6 h-6 rounded-full border-2 border-[#152238] object-cover"
+                                      title={member.name}
+                                    />
+                                  ) : (
+                                    <div
+                                      key={idx}
+                                      className="w-6 h-6 rounded-full border-2 border-[#152238] bg-[#90CDF4]/20 flex items-center justify-center text-xs text-white/60"
+                                      title={member.name}
+                                    >
+                                      {member.name[0]}
+                                    </div>
+                                  )
+                                ))}
+                              </div>
+                              {/* Show +N if more than 3 */}
+                              {event.attendingMembers.length > 3 && (
+                                <span className="text-xs text-white/40 ml-1">
+                                  +{event.attendingMembers.length - 3}
+                                </span>
+                              )}
+                              <span className="text-xs text-white/60 ml-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                {event.attendingMembers.map((m: any) => m.name).join(', ')}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-white/60" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                              TBA
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      <button
-                        className={`px-8 py-3 rounded-full text-sm font-black transition-all duration-300 hover:scale-105 ${event.ticketStatus === 'On Sale'
-                          ? 'bg-[#F6E05E] text-[#1a2f47] hover:shadow-xl hover:shadow-[#F6E05E]/30'
-                          : 'bg-white/10 text-white/60 border border-white/20'
-                          }`}
-                        style={{ fontFamily: 'Montserrat, sans-serif' }}
-                      >
-                        {event.ticketStatus === 'On Sale' ? 'GET TICKETS' : 'NOTIFY ME'}
-                      </button>
+                      {/* Ticket Button - Conditional */}
+                      {event.ticketEnabled && (
+                        <a
+                          href={event.ticketUrl || '#'}
+                          target={event.ticketUrl ? '_blank' : undefined}
+                          rel={event.ticketUrl ? 'noopener noreferrer' : undefined}
+                          className={`px-8 py-3 rounded-full text-sm font-black transition-all duration-300 hover:scale-105 ${event.ticketStatus === 'On Sale'
+                            ? 'bg-[#F6E05E] text-[#1a2f47] hover:shadow-xl hover:shadow-[#F6E05E]/30'
+                            : 'bg-white/10 text-white/60 border border-white/20'
+                            }`}
+                          style={{ fontFamily: 'Montserrat, sans-serif' }}
+                        >
+                          {event.ticketStatus === 'On Sale' ? 'GET TICKETS' : 'NOTIFY ME'}
+                        </a>
+                      )}
                     </div>
                   </div>
                 </div>

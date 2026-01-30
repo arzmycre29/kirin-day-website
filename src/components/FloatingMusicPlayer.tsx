@@ -3,7 +3,7 @@ import { useAudio } from '../context/AudioContext';
 import { useState } from 'react';
 
 export function FloatingMusicPlayer() {
-    const { currentTrack, isPlaying, progress, currentTime, duration, volume, togglePlay, seek, setVolume, pause } = useAudio();
+    const { currentTrack, isPlaying, progress, currentTime, duration, volume, togglePlay, seek, setVolume, stopTrack } = useAudio();
     const [showVolume, setShowVolume] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
 
@@ -120,9 +120,9 @@ export function FloatingMusicPlayer() {
                         )}
                     </div>
 
-                    {/* Minimize Button */}
+                    {/* Close Button */}
                     <button
-                        onClick={() => setIsMinimized(true)}
+                        onClick={stopTrack}
                         className="p-2 rounded-lg hover:bg-white/5 transition-colors"
                     >
                         <X className="w-5 h-5 text-white/40 hover:text-white/60" />
