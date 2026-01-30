@@ -222,46 +222,51 @@ export function SchedulePage({ targetId }: SchedulePageProps) {
                         <div className="h-8 w-px bg-white/10" />
 
                         {/* Attending Members */}
-                        <div className="flex items-center gap-2">
-                          <Users className="w-5 h-5 text-[#90CDF4]" />
-                          {event.attendingMembers && event.attendingMembers.length > 0 ? (
-                            <div className="flex items-center gap-1">
-                              {/* Member avatars - show up to 3 */}
-                              <div className="flex -space-x-2">
-                                {event.attendingMembers.slice(0, 3).map((member: any, idx: number) => (
-                                  member.photo ? (
-                                    <img
-                                      key={idx}
-                                      src={member.photo}
-                                      alt={member.name}
-                                      className="w-6 h-6 rounded-full border-2 border-[#152238] object-cover"
-                                      title={member.name}
-                                    />
-                                  ) : (
-                                    <div
-                                      key={idx}
-                                      className="w-6 h-6 rounded-full border-2 border-[#152238] bg-[#90CDF4]/20 flex items-center justify-center text-xs text-white/60"
-                                      title={member.name}
-                                    >
-                                      {member.name[0]}
-                                    </div>
-                                  )
-                                ))}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-5 h-5 text-[#90CDF4]" />
+                            {event.attendingMembers && event.attendingMembers.length > 0 ? (
+                              <div className="flex items-center">
+                                {/* Member avatars - show up to 5 */}
+                                <div className="flex -space-x-2">
+                                  {event.attendingMembers.slice(0, 5).map((member: any, idx: number) => (
+                                    member.photo ? (
+                                      <img
+                                        key={idx}
+                                        src={member.photo}
+                                        alt={member.name}
+                                        className="w-7 h-7 rounded-full border-2 border-[#152238] object-cover"
+                                        title={member.name}
+                                      />
+                                    ) : (
+                                      <div
+                                        key={idx}
+                                        className="w-7 h-7 rounded-full border-2 border-[#152238] bg-[#90CDF4]/20 flex items-center justify-center text-xs text-white/60"
+                                        title={member.name}
+                                      >
+                                        {member.name[0]}
+                                      </div>
+                                    )
+                                  ))}
+                                </div>
+                                {/* Show +N if more than 5 */}
+                                {event.attendingMembers.length > 5 && (
+                                  <span className="text-xs text-white/50 ml-2 font-medium">
+                                    +{event.attendingMembers.length - 5}
+                                  </span>
+                                )}
                               </div>
-                              {/* Show +N if more than 3 */}
-                              {event.attendingMembers.length > 3 && (
-                                <span className="text-xs text-white/40 ml-1">
-                                  +{event.attendingMembers.length - 3}
-                                </span>
-                              )}
-                              <span className="text-xs text-white/60 ml-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                                {event.attendingMembers.map((m: any) => m.name).join(', ')}
+                            ) : (
+                              <span className="text-sm text-white/60" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                TBA
                               </span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-white/60" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                              TBA
-                            </span>
+                            )}
+                          </div>
+                          {/* Member names on separate line */}
+                          {event.attendingMembers && event.attendingMembers.length > 0 && (
+                            <p className="text-xs text-white/50 pl-7 truncate max-w-xs md:max-w-md" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                              {event.attendingMembers.map((m: any) => m.name).join(', ')}
+                            </p>
                           )}
                         </div>
                       </div>
@@ -290,25 +295,6 @@ export function SchedulePage({ targetId }: SchedulePageProps) {
               <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#F6E05E] to-transparent transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500" />
             </div>
           ))}
-        </div>
-
-        {/* Call to Action */}
-        <div
-          className="mt-16 p-12 rounded-2xl border-2 border-[#F6E05E]/30 text-center"
-          style={{ background: 'rgba(246, 224, 94, 0.05)' }}
-        >
-          <h3 className="text-3xl font-black text-white mb-4" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-            Never Miss a Show!
-          </h3>
-          <p className="text-white/70 mb-8 max-w-2xl mx-auto" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-            Subscribe to our newsletter and get notified about new performances, exclusive events, and special announcements
-          </p>
-          <button
-            className="px-10 py-4 rounded-full bg-[#F6E05E] text-[#1a2f47] font-black hover:scale-105 transition-all duration-300 hover:shadow-xl hover:shadow-[#F6E05E]/30"
-            style={{ fontFamily: 'Montserrat, sans-serif' }}
-          >
-            SUBSCRIBE NOW
-          </button>
         </div>
       </div>
     </div>
