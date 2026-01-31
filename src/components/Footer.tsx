@@ -9,7 +9,7 @@ export function Footer({ onNavigate }: FooterProps) {
   const footerLinks = [
     { name: 'About Us', page: 'about' },
     { name: 'Members', page: 'members' },
-    { name: 'Discography', page: 'media' }, // Discography -> Media page as requested
+    { name: 'Discography', page: 'music' }, // Discography -> Media page as requested
     { name: 'Schedule', page: 'schedule' },
     { name: 'Shop', page: 'shop' }
   ];
