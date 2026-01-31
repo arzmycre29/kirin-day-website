@@ -5,6 +5,7 @@ interface HeroMember {
   photo: string;
   order: number;
   mobileCropPosition: string; // e.g., "top", "center", "20%", "30%"
+  memberColor: string; // HEX color for member's signature color
 }
 
 interface HeroSectionProps {
@@ -15,6 +16,7 @@ export function HeroSection({ onStreamClick }: HeroSectionProps) {
   const [members, setMembers] = useState<HeroMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [isVisible, setIsVisible] = useState(false);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchHeroMembers = async () => {
@@ -31,7 +33,8 @@ export function HeroSection({ onStreamClick }: HeroSectionProps) {
             ? (item.fields.photo.fields.file.url.startsWith('//') ? 'https:' + item.fields.photo.fields.file.url : item.fields.photo.fields.file.url)
             : 'https://via.placeholder.com/400x800',
           order: item.fields.order || 0,
-          mobileCropPosition: item.fields.mobileCropPosition || '30%' // Default to 30% from top
+          mobileCropPosition: item.fields.mobileCropPosition || '30%', // Default to 30% from top
+          memberColor: item.fields.memberColor || '#3b82f6' // Default blue
         }));
 
         setMembers(formattedMembers);
@@ -56,45 +59,88 @@ export function HeroSection({ onStreamClick }: HeroSectionProps) {
         {loading ? (
           <div className="flex-1" />
         ) : members.length > 0 ? (
-          members.map((member, index) => (
-            <div
-              key={member.name + index}
-              className="relative flex-1 overflow-hidden cursor-pointer group md:h-full h-[35vh]"
-              style={{
-                opacity: isVisible ? 1 : 0,
-                transform: isVisible ? 'translateY(0)' : 'translateY(40px)',
-                transition: `all 0.8s cubic-bezier(0.4, 0, 0.2, 1) ${index * 150}ms`
-              }}
-            >
-              {/* Member Photo */}
-              <img
-                src={member.photo}
-                alt={member.name}
-                className="absolute inset-0 w-full h-full object-cover brightness-[0.85]
-                  transition-all duration-500 ease-out
-                  group-hover:scale-110 group-hover:brightness-100"
+          members.map((member, index) => {
+            const isHovered = hoveredIndex === index;
+            return (
+              <div
+                key={member.name + index}
+                className="relative flex-1 overflow-hidden cursor-pointer md:h-full h-[35vh]"
                 style={{
-                  objectPosition: `center ${member.mobileCropPosition}`
+                  opacity: isVisible ? 1 : 0,
+                  transform: isVisible ? 'translateY(0)' : 'translateY(40px)',
+                  transition: `all 0.8s cubic-bezier(0.4, 0, 0.2, 1) ${index * 150}ms`
                 }}
-              />
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                {/* Member Photo */}
+                <img
+                  src={member.photo}
+                  alt={member.name}
+                  className="absolute inset-0 w-full h-full object-cover transition-all duration-500 ease-out"
+                  style={{
+                    objectPosition: `center ${member.mobileCropPosition}`,
+                    transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+                    filter: isHovered ? 'brightness(1)' : 'brightness(0.85)'
+                  }}
+                />
 
-              {/* Gradient overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20 
-                transition-all duration-500 group-hover:from-black/30 group-hover:to-transparent" />
+                {/* Gradient overlay */}
+                <div
+                  className="absolute inset-0 transition-all duration-500"
+                  style={{
+                    background: isHovered
+                      ? 'linear-gradient(to top, rgba(0,0,0,0.3) 0%, transparent 50%, transparent 100%)'
+                      : 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%, rgba(0,0,0,0.2) 100%)'
+                  }}
+                />
 
-              {/* Member name on hover */}
-              <div className="absolute bottom-32 left-0 right-0 text-center 
-                opacity-0 group-hover:opacity-100 
-                transform translate-y-4 group-hover:translate-y-0
-                transition-all duration-300 hidden md:block z-30">
-                <span className="text-white text-xs font-bold tracking-widest uppercase px-4 py-2 
-                  bg-black/50 backdrop-blur-md rounded-full border border-white/20"
-                  style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                  {member.name}
-                </span>
+                {/* Desktop only: Color overlay - fades on hover */}
+                <div
+                  className="absolute inset-0 hidden md:block transition-opacity duration-500 ease-out z-10"
+                  style={{
+                    backgroundColor: member.memberColor + '80',
+                    opacity: isHovered ? 0 : 1
+                  }}
+                />
+
+                {/* Desktop only: Vertical name - fades on hover */}
+                <div
+                  className="absolute inset-0 hidden md:flex items-center justify-center transition-opacity duration-500 ease-out z-20"
+                  style={{ opacity: isHovered ? 0 : 1 }}
+                >
+                  <span
+                    className="text-white text-2xl lg:text-4xl font-black tracking-[0.3em] uppercase"
+                    style={{
+                      fontFamily: 'Montserrat, sans-serif',
+                      writingMode: 'vertical-rl',
+                      textOrientation: 'mixed',
+                      textShadow: '0 2px 15px rgba(0,0,0,0.5)'
+                    }}
+                  >
+                    {member.name}
+                  </span>
+                </div>
+
+                {/* Member name badge on hover - desktop only */}
+                <div
+                  className="absolute top-24 left-0 right-0 text-center hidden md:block transition-all duration-300 z-30"
+                  style={{
+                    opacity: isHovered ? 1 : 0,
+                    transform: isHovered ? 'translateY(0)' : 'translateY(-16px)'
+                  }}
+                >
+                  <span
+                    className="text-white text-xs font-bold tracking-widest uppercase px-4 py-2 
+                    bg-black/50 backdrop-blur-md rounded-full border border-white/20"
+                    style={{ fontFamily: 'Montserrat, sans-serif' }}
+                  >
+                    {member.name}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <div className="flex-1 bg-gradient-to-b from-[#1a2f47] to-[#0a0a0a]" />
         )}

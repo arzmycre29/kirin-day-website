@@ -60,7 +60,7 @@ export function MemberModal({ member, isOpen, onClose }: MemberModalProps) {
                   <img
                     src={member.image}
                     alt={member.name}
-                    className="w-full h-full object-cover object-top"
+                    className="w-full h-full object-cover object-center md:object-top"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-[#1E1E1E] via-transparent to-transparent" />
                 </div>
