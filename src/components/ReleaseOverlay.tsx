@@ -6,16 +6,49 @@ import { useNavigate } from 'react-router-dom';
 
 const SESSION_KEY = 'kirin_release_overlay_shown';
 
+interface OverlayData {
+    desktopPoster: string | null;
+    mobilePoster: string | null;
+}
+
 export function ReleaseOverlay() {
     const [isVisible, setIsVisible] = useState(false);
+    const [posterData, setPosterData] = useState<OverlayData>({ desktopPoster: null, mobilePoster: null });
     const navigate = useNavigate();
 
     useEffect(() => {
         // Only show once per browser session
-        if (!sessionStorage.getItem(SESSION_KEY)) {
+        if (sessionStorage.getItem(SESSION_KEY)) return;
+
+        // Fetch poster from Contentful
+        const fetchOverlay = async () => {
+            try {
+                const { client } = await import('../lib/contentful');
+                const response = await client.getEntries({
+                    content_type: 'releaseOverlay',
+                    limit: 1,
+                });
+
+                if (response.items.length > 0) {
+                    const item = response.items[0] as any;
+                    const getUrl = (field: any) => {
+                        const url = field?.fields?.file?.url;
+                        return url ? (url.startsWith('//') ? 'https:' + url : url) : null;
+                    };
+                    setPosterData({
+                        desktopPoster: getUrl(item.fields.desktopPoster),
+                        mobilePoster: getUrl(item.fields.mobilePoster),
+                    });
+                }
+            } catch (err) {
+                console.warn('ReleaseOverlay: Contentful fetch failed, using placeholders', err);
+            }
+
             setIsVisible(true);
             document.body.style.overflow = 'hidden';
-        }
+        };
+
+        fetchOverlay();
     }, []);
 
     const handleClose = () => {
@@ -28,6 +61,39 @@ export function ReleaseOverlay() {
         handleClose();
         navigate('/schedule');
     };
+
+    // Placeholder content for when no Contentful image is available
+    const PosterPlaceholder = ({ mobile = false }: { mobile?: boolean }) => (
+        <div
+            className="w-full h-full flex flex-col items-center justify-center relative"
+            style={{
+                background: mobile
+                    ? 'linear-gradient(180deg, #0f1a2a 0%, #1a2f47 25%, #152238 50%, #1a2f47 75%, #0f1a2a 100%)'
+                    : 'linear-gradient(135deg, #0f1a2a 0%, #1a2f47 30%, #152238 60%, #1a2f47 100%)',
+            }}
+        >
+            <div
+                className="absolute inset-0 opacity-30"
+                style={{
+                    background: mobile
+                        ? 'radial-gradient(ellipse at 50% 30%, rgba(144, 205, 244, 0.35) 0%, transparent 55%), radial-gradient(ellipse at 50% 80%, rgba(246, 224, 94, 0.15) 0%, transparent 50%)'
+                        : 'radial-gradient(ellipse at 50% 40%, rgba(144, 205, 244, 0.3) 0%, transparent 60%), radial-gradient(ellipse at 70% 70%, rgba(246, 224, 94, 0.15) 0%, transparent 50%)',
+                }}
+            />
+            <div className="relative text-center px-6 md:px-8">
+                <p className="text-[#F6E05E] text-xs md:text-base font-bold tracking-[0.3em] mb-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    ✦ NEW RELEASE ✦
+                </p>
+                <h2 className={`font-black text-[#90CDF4] mb-4 ${mobile ? 'text-4xl' : 'text-4xl md:text-6xl'}`} style={{ fontFamily: 'Montserrat, sans-serif', textShadow: '0 0 40px rgba(144, 205, 244, 0.4)' }}>
+                    KIRIN DAY
+                </h2>
+                <div className={`${mobile ? 'w-20' : 'w-24'} h-1 bg-[#F6E05E] mx-auto mb-4`} />
+                <p className={`font-bold text-white/90 ${mobile ? 'text-lg' : 'text-xl md:text-2xl'}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    3rd Single Release
+                </p>
+            </div>
+        </div>
+    );
 
     return createPortal(
         <AnimatePresence>
@@ -46,21 +112,21 @@ export function ReleaseOverlay() {
                         onClick={handleClose}
                     />
 
-                    {/* Close Button */}
+                    {/* Close Button — z-50 to stay above content */}
                     <motion.button
                         onClick={handleClose}
-                        className="absolute top-6 right-6 z-10 w-12 h-12 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 hover:scale-110 transition-all duration-300"
+                        className="absolute top-4 right-4 md:top-6 md:right-6 z-50 w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/15 border border-white/30 flex items-center justify-center text-white hover:bg-white/30 hover:scale-110 transition-all duration-300"
                         initial={{ opacity: 0, scale: 0.5 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.6, duration: 0.3 }}
+                        transition={{ delay: 0.5, duration: 0.3 }}
                         aria-label="Close overlay"
                     >
-                        <X className="w-6 h-6" />
+                        <X className="w-5 h-5 md:w-6 md:h-6" />
                     </motion.button>
 
                     {/* Content Container */}
                     <motion.div
-                        className="relative z-10 flex flex-col items-center gap-6 md:gap-8 max-w-4xl w-full"
+                        className="relative z-10 flex flex-col items-center gap-5 md:gap-8 max-w-4xl w-full"
                         initial={{ opacity: 0, scale: 0.85, y: 30 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: -20 }}
@@ -71,85 +137,37 @@ export function ReleaseOverlay() {
                             className="hidden md:block w-full rounded-2xl overflow-hidden border-2 border-[#90CDF4]/30 shadow-2xl shadow-[#90CDF4]/20"
                             style={{ aspectRatio: '16/9' }}
                         >
-                            {/* 
-                TODO: Replace with Contentful image
-                Desktop poster (landscape): <img src={desktopPosterUrl} alt="..." className="w-full h-full object-cover" />
-              */}
-                            <div
-                                className="w-full h-full flex flex-col items-center justify-center relative"
-                                style={{
-                                    background: 'linear-gradient(135deg, #0f1a2a 0%, #1a2f47 30%, #152238 60%, #1a2f47 100%)',
-                                }}
-                            >
-                                {/* Decorative glow */}
-                                <div
-                                    className="absolute inset-0 opacity-30"
-                                    style={{
-                                        background: 'radial-gradient(ellipse at 50% 40%, rgba(144, 205, 244, 0.3) 0%, transparent 60%), radial-gradient(ellipse at 70% 70%, rgba(246, 224, 94, 0.15) 0%, transparent 50%)',
-                                    }}
+                            {posterData.desktopPoster ? (
+                                <img
+                                    src={posterData.desktopPoster}
+                                    alt="Kirin Day - 3rd Single Release"
+                                    className="w-full h-full object-cover"
                                 />
-                                <div className="relative text-center px-8">
-                                    <p className="text-[#F6E05E] text-sm md:text-base font-bold tracking-[0.3em] mb-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                                        ✦ NEW RELEASE ✦
-                                    </p>
-                                    <h2 className="text-4xl md:text-6xl font-black text-[#90CDF4] mb-4" style={{ fontFamily: 'Montserrat, sans-serif', textShadow: '0 0 40px rgba(144, 205, 244, 0.4)' }}>
-                                        KIRIN DAY
-                                    </h2>
-                                    <div className="w-24 h-1 bg-[#F6E05E] mx-auto mb-4" />
-                                    <p className="text-xl md:text-2xl font-bold text-white/90" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                                        3rd Single Release
-                                    </p>
-                                    <p className="text-sm text-white/50 mt-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                                        Poster placeholder — akan diganti dari Contentful
-                                    </p>
-                                </div>
-                            </div>
+                            ) : (
+                                <PosterPlaceholder />
+                            )}
                         </div>
 
                         {/* Poster — Mobile (portrait) */}
                         <div
-                            className="block md:hidden w-full max-w-sm rounded-2xl overflow-hidden border-2 border-[#90CDF4]/30 shadow-2xl shadow-[#90CDF4]/20"
-                            style={{ aspectRatio: '9/16' }}
+                            className="block md:hidden w-full max-w-xs mx-auto rounded-2xl overflow-hidden border-2 border-[#90CDF4]/30 shadow-2xl shadow-[#90CDF4]/20"
+                            style={{ aspectRatio: '9/16', maxHeight: '65vh' }}
                         >
-                            {/* 
-                TODO: Replace with Contentful image
-                Mobile poster (portrait): <img src={mobilePosterUrl} alt="..." className="w-full h-full object-cover" />
-              */}
-                            <div
-                                className="w-full h-full flex flex-col items-center justify-center relative"
-                                style={{
-                                    background: 'linear-gradient(180deg, #0f1a2a 0%, #1a2f47 25%, #152238 50%, #1a2f47 75%, #0f1a2a 100%)',
-                                }}
-                            >
-                                {/* Decorative glow */}
-                                <div
-                                    className="absolute inset-0 opacity-30"
-                                    style={{
-                                        background: 'radial-gradient(ellipse at 50% 30%, rgba(144, 205, 244, 0.35) 0%, transparent 55%), radial-gradient(ellipse at 50% 80%, rgba(246, 224, 94, 0.15) 0%, transparent 50%)',
-                                    }}
+                            {posterData.mobilePoster ? (
+                                <img
+                                    src={posterData.mobilePoster}
+                                    alt="Kirin Day - 3rd Single Release"
+                                    className="w-full h-full object-cover"
                                 />
-                                <div className="relative text-center px-6">
-                                    <p className="text-[#F6E05E] text-xs font-bold tracking-[0.3em] mb-4" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                                        ✦ NEW RELEASE ✦
-                                    </p>
-                                    <h2 className="text-4xl font-black text-[#90CDF4] mb-4" style={{ fontFamily: 'Montserrat, sans-serif', textShadow: '0 0 40px rgba(144, 205, 244, 0.4)' }}>
-                                        KIRIN DAY
-                                    </h2>
-                                    <div className="w-20 h-1 bg-[#F6E05E] mx-auto mb-4" />
-                                    <p className="text-lg font-bold text-white/90" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                                        3rd Single Release
-                                    </p>
-                                    <p className="text-xs text-white/50 mt-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                                        Poster placeholder
-                                    </p>
-                                </div>
-                            </div>
+                            ) : (
+                                <PosterPlaceholder mobile />
+                            )}
                         </div>
 
                         {/* CTA Button */}
                         <motion.button
                             onClick={handleCTA}
-                            className="flex items-center gap-3 px-10 py-4 rounded-full bg-[#F6E05E] text-[#1a2f47] font-black text-lg hover:scale-105 hover:shadow-xl hover:shadow-[#F6E05E]/30 transition-all duration-300"
+                            className="flex items-center gap-3 px-8 py-3 md:px-10 md:py-4 rounded-full bg-[#F6E05E] text-[#1a2f47] font-black text-base md:text-lg hover:scale-105 hover:shadow-xl hover:shadow-[#F6E05E]/30 transition-all duration-300"
                             style={{ fontFamily: 'Montserrat, sans-serif' }}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
