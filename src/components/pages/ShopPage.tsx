@@ -1,5 +1,6 @@
 import { ShoppingCart, Package, Star, ExternalLink } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { PageSkeleton } from '../PageSkeleton';
 
 interface Product {
   id: string;
@@ -60,13 +61,7 @@ export function ShopPage() {
     : products.filter(p => p.category === activeCategory);
 
   if (loading) {
-    return (
-      <div className="min-h-screen pt-32 pb-32 px-6 bg-[#1a2f47] flex items-center justify-center">
-        <div className="text-2xl font-black text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-          LOADING SHOP...
-        </div>
-      </div>
-    );
+    return <PageSkeleton variant="cards" />;
   }
 
   return (

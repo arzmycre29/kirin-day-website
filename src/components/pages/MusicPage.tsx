@@ -2,6 +2,7 @@ import { Play, Pause, Music, ExternalLink, Heart, Share2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAudio } from '../../context/AudioContext';
+import { PageSkeleton } from '../PageSkeleton';
 
 interface Track {
   id: string;
@@ -92,13 +93,7 @@ export function MusicPage() {
   }, [targetId, loading, tracks]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen pt-32 pb-32 px-6 bg-[#1a2f47] flex items-center justify-center">
-        <div className="text-2xl font-black text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-          LOADING DISCOGRAPHY...
-        </div>
-      </div>
-    );
+    return <PageSkeleton variant="list" />;
   }
 
   if (tracks.length === 0) {

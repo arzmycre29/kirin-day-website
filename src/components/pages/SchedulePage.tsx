@@ -1,6 +1,7 @@
 import { Calendar, MapPin, Clock, Ticket, TrendingUp, Users } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { PageSkeleton } from '../PageSkeleton';
 
 export function SchedulePage() {
   const [searchParams] = useSearchParams();
@@ -80,13 +81,7 @@ export function SchedulePage() {
   }, [targetId, loading, events]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen pt-32 pb-32 px-6 bg-[#152238] flex items-center justify-center">
-        <div className="text-2xl font-black text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-          LOADING SCHEDULE...
-        </div>
-      </div>
-    );
+    return <PageSkeleton variant="list" />;
   }
 
   return (

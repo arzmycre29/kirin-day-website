@@ -1,5 +1,6 @@
 import { Play, Image as ImageIcon, Video as VideoIcon, Folder, ArrowLeft } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { PageSkeleton } from '../PageSkeleton';
 
 interface Album {
     title: string;
@@ -82,13 +83,7 @@ export function MediaPage() {
     };
 
     if (loading) {
-        return (
-            <div className="min-h-screen pt-32 pb-32 px-6 bg-[#152238] flex items-center justify-center">
-                <div className="text-2xl font-black text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    LOADING GALLERY...
-                </div>
-            </div>
-        );
+        return <PageSkeleton variant="cards" />;
     }
 
     // Album Detail View

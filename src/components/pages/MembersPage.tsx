@@ -1,5 +1,6 @@
 import { Instagram, Twitter, Youtube, Award, Star } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { PageSkeleton } from '../PageSkeleton';
 import { MemberModal } from '../MemberModal';
 
 export function MembersPage() {
@@ -81,13 +82,7 @@ export function MembersPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen pt-32 pb-32 px-6 bg-[#152238] flex items-center justify-center">
-        <div className="text-2xl font-black text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-          LOADING STARS...
-        </div>
-      </div>
-    );
+    return <PageSkeleton variant="cards" />;
   }
 
   if (error) {

@@ -1,6 +1,7 @@
 import { Sparkles, Play, Calendar, Music, Image as ImageIcon, Video } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageSkeleton } from '../PageSkeleton';
 import { useAudio } from '../../context/AudioContext';
 import { HeroSection } from '../HeroSection';
 
@@ -162,13 +163,7 @@ export function HomePage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen pt-32 pb-32 px-6 bg-[#1a2f47] flex items-center justify-center">
-        <div className="text-2xl font-black text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-          LOADING HOMEPAGE...
-        </div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   return (
