@@ -12,6 +12,7 @@ import { MediaPage } from './components/pages/MediaPage';
 import { AudioProvider } from './context/AudioContext';
 import { FloatingMusicPlayer } from './components/FloatingMusicPlayer';
 import { PageTransition } from './components/PageTransition';
+import { ReleaseOverlay } from './components/ReleaseOverlay';
 import { useEffect } from 'react';
 
 // Scroll to top on route change
@@ -45,6 +46,7 @@ export default function App() {
         </AnimatePresence>
         <Footer />
         <FloatingMusicPlayer />
+        <ReleaseOverlay />
       </div>
     </AudioProvider>
   );
