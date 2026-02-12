@@ -1,24 +1,20 @@
 import { Instagram, Twitter, Youtube, Mail, MapPin } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-interface FooterProps {
-  onNavigate?: (page: string) => void;
-}
+export function Footer() {
+  const navigate = useNavigate();
 
-export function Footer({ onNavigate }: FooterProps) {
-  // Footer links with page mappings
+  // Footer links with path mappings - About Us removed
   const footerLinks = [
-    { name: 'About Us', page: 'about' },
-    { name: 'Members', page: 'members' },
-    { name: 'Discography', page: 'music' }, // Discography -> Music page
-    { name: 'Schedule', page: 'schedule' },
-    { name: 'Shop', page: 'shop' }
+    { name: 'Members', path: '/members' },
+    { name: 'Discography', path: '/music' },
+    { name: 'Schedule', path: '/schedule' },
+    { name: 'Shop', path: '/shop' }
   ];
 
-  const handleLinkClick = (page: string) => {
-    if (onNavigate) {
-      onNavigate(page);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+  const handleLinkClick = (path: string) => {
+    navigate(path);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -47,7 +43,7 @@ export function Footer({ onNavigate }: FooterProps) {
               {footerLinks.map((link) => (
                 <li key={link.name}>
                   <button
-                    onClick={() => handleLinkClick(link.page)}
+                    onClick={() => handleLinkClick(link.path)}
                     className="text-white/60 hover:text-[#90CDF4] transition-colors text-sm text-left"
                     style={{ fontFamily: 'Montserrat, sans-serif' }}
                   >

@@ -1,11 +1,10 @@
 import { Calendar, MapPin, Clock, Ticket, TrendingUp, Users } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
-interface SchedulePageProps {
-  targetId?: string | null;
-}
-
-export function SchedulePage({ targetId }: SchedulePageProps) {
+export function SchedulePage() {
+  const [searchParams] = useSearchParams();
+  const targetId = searchParams.get('id');
   // State for events
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

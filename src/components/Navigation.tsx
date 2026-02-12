@@ -1,18 +1,16 @@
 import { Menu, X, ShoppingCart } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 // Fallback logo
 const defaultLogo = "https://via.placeholder.com/150/F6E05E/1a2f47?text=Kirin+Day";
 
-interface NavigationProps {
-  currentPage: string;
-  onNavigate: (page: string) => void;
-}
-
-export function Navigation({ currentPage, onNavigate }: NavigationProps) {
+export function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [cartCount] = useState(3); // Mock cart count
   const [logoUrl, setLogoUrl] = useState<string>(defaultLogo);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Fetch logo from Contentful
   useEffect(() => {
@@ -42,19 +40,23 @@ export function Navigation({ currentPage, onNavigate }: NavigationProps) {
   }, []);
 
   const navLinks = [
-    { name: 'HOME', page: 'home' },
-    { name: 'ABOUT US', page: 'about' },
-    { name: 'MEMBERS', page: 'members' },
-    { name: 'MUSIC', page: 'music' },
-    { name: 'SCHEDULE', page: 'schedule' },
-    { name: 'MEDIA', page: 'media' },
-    { name: 'SHOP', page: 'shop' }
+    { name: 'HOME', path: '/' },
+    { name: 'MEMBERS', path: '/members' },
+    { name: 'MUSIC', path: '/music' },
+    { name: 'SCHEDULE', path: '/schedule' },
+    { name: 'MEDIA', path: '/media' },
+    { name: 'SHOP', path: '/shop' }
   ];
 
-  const handleNavClick = (page: string) => {
-    onNavigate(page);
+  const handleNavClick = (path: string) => {
+    navigate(path);
     setIsMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const isActive = (path: string) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
   };
 
   return (
@@ -62,7 +64,7 @@ export function Navigation({ currentPage, onNavigate }: NavigationProps) {
       <div className="max-w-7xl mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <button onClick={() => handleNavClick('home')} className="flex items-center gap-3 group">
+          <button onClick={() => handleNavClick('/')} className="flex items-center gap-3 group">
             <div className="w-10 h-10 rounded-full overflow-hidden bg-[#F6E05E]/10 p-0.5 transition-transform duration-300 group-hover:scale-110">
               <img src={logoUrl} alt="Kirin Day" className="w-full h-full object-cover rounded-full" />
             </div>
@@ -76,20 +78,20 @@ export function Navigation({ currentPage, onNavigate }: NavigationProps) {
             {navLinks.map((link) => (
               <button
                 key={link.name}
-                onClick={() => handleNavClick(link.page)}
-                className={`text-sm font-bold transition-colors duration-300 tracking-wide relative group ${currentPage === link.page ? 'text-[#90CDF4]' : 'text-[#FFFCE0]/80 hover:text-[#90CDF4]'
+                onClick={() => handleNavClick(link.path)}
+                className={`text-sm font-bold transition-colors duration-300 tracking-wide relative group ${isActive(link.path) ? 'text-[#90CDF4]' : 'text-[#FFFCE0]/80 hover:text-[#90CDF4]'
                   }`}
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
               >
                 {link.name}
-                <span className={`absolute -bottom-1 left-0 h-0.5 bg-[#F6E05E] transition-all duration-300 ${currentPage === link.page ? 'w-full' : 'w-0 group-hover:w-full'
+                <span className={`absolute -bottom-1 left-0 h-0.5 bg-[#F6E05E] transition-all duration-300 ${isActive(link.path) ? 'w-full' : 'w-0 group-hover:w-full'
                   }`} />
               </button>
             ))}
 
             {/* Shopping Cart Icon */}
             <button
-              onClick={() => handleNavClick('shop')}
+              onClick={() => handleNavClick('/shop')}
               className="relative p-2 rounded-full bg-white/5 hover:bg-[#F6E05E]/10 border border-white/10 hover:border-[#F6E05E]/30 transition-all duration-300 group"
               aria-label="Shopping Cart"
             >
@@ -121,8 +123,8 @@ export function Navigation({ currentPage, onNavigate }: NavigationProps) {
             {navLinks.map((link) => (
               <button
                 key={link.name}
-                onClick={() => handleNavClick(link.page)}
-                className={`block w-full text-left text-sm font-bold transition-colors py-2 ${currentPage === link.page ? 'text-[#90CDF4]' : 'text-[#FFFCE0]/80 hover:text-[#90CDF4]'
+                onClick={() => handleNavClick(link.path)}
+                className={`block w-full text-left text-sm font-bold transition-colors py-2 ${isActive(link.path) ? 'text-[#90CDF4]' : 'text-[#FFFCE0]/80 hover:text-[#90CDF4]'
                   }`}
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
               >
@@ -132,7 +134,7 @@ export function Navigation({ currentPage, onNavigate }: NavigationProps) {
 
             {/* Mobile Cart */}
             <button
-              onClick={() => handleNavClick('shop')}
+              onClick={() => handleNavClick('/shop')}
               className="flex items-center gap-3 w-full text-left text-sm font-bold text-[#FFFCE0]/80 hover:text-[#90CDF4] transition-colors py-2"
               style={{ fontFamily: 'Montserrat, sans-serif' }}
             >

@@ -1,5 +1,6 @@
 import { Play, Pause, Music, ExternalLink, Heart, Share2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAudio } from '../../context/AudioContext';
 
 interface Track {
@@ -14,11 +15,9 @@ interface Track {
   audioUrl: string | null;
 }
 
-interface MusicPageProps {
-  targetId?: string | null;
-}
-
-export function MusicPage({ targetId }: MusicPageProps) {
+export function MusicPage() {
+  const [searchParams] = useSearchParams();
+  const targetId = searchParams.get('id');
   const { currentTrack, isPlaying, progress, playTrack } = useAudio();
   const [selectedTrack, setSelectedTrack] = useState<number>(0);
 

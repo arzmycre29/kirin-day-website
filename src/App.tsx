@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'motion/react';
 import { Navigation } from './components/Navigation';
 import { Footer } from './components/Footer';
 import { HomePage } from './components/pages/HomePage';
@@ -10,49 +11,39 @@ import { ShopPage } from './components/pages/ShopPage';
 import { MediaPage } from './components/pages/MediaPage';
 import { AudioProvider } from './context/AudioContext';
 import { FloatingMusicPlayer } from './components/FloatingMusicPlayer';
+import { PageTransition } from './components/PageTransition';
+import { useEffect } from 'react';
 
+// Scroll to top on route change
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState('home');
-  const [targetId, setTargetId] = useState<string | null>(null);
-
-  const handleNavigate = (page: string, id?: string) => {
-    setCurrentPage(page);
-    if (id) {
-      setTargetId(id);
-    } else {
-      setTargetId(null);
-    }
-    window.scrollTo(0, 0); // Scroll to top on navigation
-  };
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'home':
-        return <HomePage onNavigate={handleNavigate} />;
-      case 'about':
-        return <AboutPage />;
-      case 'members':
-        return <MembersPage />;
-      case 'music':
-        return <MusicPage targetId={targetId} />;
-      case 'schedule':
-        return <SchedulePage targetId={targetId} />;
-      case 'media':
-        return <MediaPage />;
-      case 'shop':
-        return <ShopPage />;
-      default:
-        return <HomePage onNavigate={handleNavigate} />;
-    }
-  };
+  const location = useLocation();
 
   return (
     <AudioProvider>
       <div className="min-h-screen bg-[#1a2f47] pb-20" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-        <Navigation currentPage={currentPage} onNavigate={handleNavigate} />
-        {renderPage()}
-        <Footer onNavigate={handleNavigate} />
+        <ScrollToTop />
+        <Navigation />
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={location.pathname}>
+            <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
+            <Route path="/about" element={<PageTransition><AboutPage /></PageTransition>} />
+            <Route path="/members" element={<PageTransition><MembersPage /></PageTransition>} />
+            <Route path="/music" element={<PageTransition><MusicPage /></PageTransition>} />
+            <Route path="/schedule" element={<PageTransition><SchedulePage /></PageTransition>} />
+            <Route path="/media" element={<PageTransition><MediaPage /></PageTransition>} />
+            <Route path="/shop" element={<PageTransition><ShopPage /></PageTransition>} />
+            <Route path="*" element={<PageTransition><HomePage /></PageTransition>} />
+          </Routes>
+        </AnimatePresence>
+        <Footer />
         <FloatingMusicPlayer />
       </div>
     </AudioProvider>

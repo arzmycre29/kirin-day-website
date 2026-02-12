@@ -1,16 +1,14 @@
 import { Sparkles, Play, Calendar, Music, Image as ImageIcon, Video } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAudio } from '../../context/AudioContext';
 import { HeroSection } from '../HeroSection';
 
 // Fallback image for mascot
 const kirinMascot = "https://via.placeholder.com/150/F6E05E/1a2f47?text=Kirin+Day";
 
-interface HomePageProps {
-  onNavigate: (page: string, id?: string) => void;
-}
-
-export function HomePage({ onNavigate }: HomePageProps) {
+export function HomePage() {
+  const navigate = useNavigate();
   const { playTrack } = useAudio();
   const [loading, setLoading] = useState(true);
   const [latestEvents, setLatestEvents] = useState<any[]>([]);
@@ -142,11 +140,11 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
   // Deep Linking Click Handlers
   const handleEventClick = (eventId: string) => {
-    onNavigate('schedule', eventId);
+    navigate('/schedule?id=' + eventId);
   };
 
   const handleMusicClick = (trackId: string) => {
-    onNavigate('music', trackId);
+    navigate('/music?id=' + trackId);
   };
 
   const handlePlayClick = (e: React.MouseEvent, track: any) => {
@@ -176,7 +174,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
   return (
     <div className="min-h-screen">
       {/* Hero Section - Using Component */}
-      <HeroSection onStreamClick={() => onNavigate('music')} />
+      <HeroSection onStreamClick={() => navigate('/music')} />
 
       {/* Introduction Section */}
       <section className="py-32 px-6 bg-[#1a2f47]">
@@ -205,7 +203,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
               )}
 
               <button
-                onClick={() => onNavigate('about')}
+                onClick={() => navigate('/about')}
                 className="px-8 py-3 rounded-full border-2 border-[#90CDF4] text-[#90CDF4] font-bold hover:bg-[#90CDF4]/10 transition-all duration-300"
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
               >
@@ -266,7 +264,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
             <div className="text-center mt-8">
               <button
-                onClick={() => onNavigate('schedule')}
+                onClick={() => navigate('/schedule')}
                 className="px-8 py-3 rounded-full border-2 border-[#90CDF4] text-[#90CDF4] font-bold hover:bg-[#90CDF4]/10 transition-all duration-300"
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
               >
@@ -329,7 +327,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
             <div className="text-center mt-8">
               <button
-                onClick={() => onNavigate('music')}
+                onClick={() => navigate('/music')}
                 className="px-8 py-3 rounded-full bg-[#F6E05E] text-[#1a2f47] font-black hover:scale-105 transition-all duration-300"
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
               >
@@ -364,7 +362,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
             <div className="text-center mt-8">
               <button
-                onClick={() => onNavigate('media')}
+                onClick={() => navigate('/media')}
                 className="px-8 py-3 rounded-full border-2 border-[#90CDF4] text-[#90CDF4] font-bold hover:bg-[#90CDF4]/10 transition-all duration-300"
                 style={{ fontFamily: 'Montserrat, sans-serif' }}
               >
