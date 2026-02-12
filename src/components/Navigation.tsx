@@ -1,4 +1,4 @@
-import { Menu, X, ShoppingCart } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -7,7 +7,7 @@ const defaultLogo = "https://via.placeholder.com/150/F6E05E/1a2f47?text=Kirin+Da
 
 export function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [cartCount] = useState(3); // Mock cart count
+
   const [logoUrl, setLogoUrl] = useState<string>(defaultLogo);
   const location = useLocation();
   const navigate = useNavigate();
@@ -88,23 +88,6 @@ export function Navigation() {
                   }`} />
               </button>
             ))}
-
-            {/* Shopping Cart Icon */}
-            <button
-              onClick={() => handleNavClick('/shop')}
-              className="relative p-2 rounded-full bg-white/5 hover:bg-[#F6E05E]/10 border border-white/10 hover:border-[#F6E05E]/30 transition-all duration-300 group"
-              aria-label="Shopping Cart"
-            >
-              <ShoppingCart className="w-5 h-5 text-[#FFFCE0]/80 group-hover:text-[#F6E05E] transition-colors" />
-              {/* Yellow Badge */}
-              {cartCount > 0 && (
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#F6E05E] border-2 border-[#1a2f47] flex items-center justify-center">
-                  <span className="text-[10px] font-black text-[#1a2f47]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    {cartCount}
-                  </span>
-                </div>
-              )}
-            </button>
           </div>
 
           {/* Mobile Menu Button */}
@@ -132,15 +115,7 @@ export function Navigation() {
               </button>
             ))}
 
-            {/* Mobile Cart */}
-            <button
-              onClick={() => handleNavClick('/shop')}
-              className="flex items-center gap-3 w-full text-left text-sm font-bold text-[#FFFCE0]/80 hover:text-[#90CDF4] transition-colors py-2"
-              style={{ fontFamily: 'Montserrat, sans-serif' }}
-            >
-              <ShoppingCart className="w-5 h-5" />
-              CART ({cartCount})
-            </button>
+
           </div>
         )}
       </div>

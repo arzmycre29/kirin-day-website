@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface HeroMember {
   name: string;
@@ -17,6 +18,7 @@ export function HeroSection({ onStreamClick }: HeroSectionProps) {
   const [loading, setLoading] = useState(true);
   const [isVisible, setIsVisible] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchHeroMembers = async () => {
@@ -72,6 +74,7 @@ export function HeroSection({ onStreamClick }: HeroSectionProps) {
                 }}
                 onMouseEnter={() => setHoveredIndex(index)}
                 onMouseLeave={() => setHoveredIndex(null)}
+                onClick={() => navigate('/members?name=' + encodeURIComponent(member.name))}
               >
                 {/* Member Photo */}
                 <img

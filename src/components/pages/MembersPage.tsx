@@ -1,5 +1,6 @@
 import { Instagram, Twitter, Youtube, Award, Star } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageSkeleton } from '../PageSkeleton';
 import { MemberModal } from '../MemberModal';
 
@@ -10,6 +11,7 @@ export function MembersPage() {
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Fetch members from Contentful
   useEffect(() => {
@@ -70,6 +72,22 @@ export function MembersPage() {
 
     fetchMembers();
   }, []);
+
+  // Auto-open modal from URL param (e.g. /members?name=Akari)
+  useEffect(() => {
+    const targetName = searchParams.get('name');
+    if (targetName && members.length > 0 && !isModalOpen) {
+      const matched = members.find(
+        (m) => m.name.toLowerCase() === targetName.toLowerCase()
+      );
+      if (matched) {
+        setSelectedMember(matched);
+        setIsModalOpen(true);
+        // Clear param so back button doesn't re-trigger
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [members, searchParams]);
 
   const handleMemberClick = (member: any) => {
     setSelectedMember(member);
