@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Ticket } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -28,7 +29,7 @@ export function ReleaseOverlay() {
         navigate('/schedule');
     };
 
-    return (
+    return createPortal(
         <AnimatePresence>
             {isVisible && (
                 <motion.div
@@ -159,6 +160,7 @@ export function ReleaseOverlay() {
                     </motion.div>
                 </motion.div>
             )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
     );
 }
