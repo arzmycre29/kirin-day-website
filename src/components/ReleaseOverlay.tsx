@@ -246,7 +246,7 @@ export function ReleaseOverlay() {
                                         animate="center"
                                         exit="exit"
                                         transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                                        className="absolute inset-0 w-full h-full"
+                                        className="absolute inset-0 w-full h-full z-[1]"
                                     >
                                         {currentBanner?.desktopImage ? (
                                             <img
@@ -264,8 +264,8 @@ export function ReleaseOverlay() {
                                 </AnimatePresence>
                             </div>
 
-                            {/* Mobile Banner (portrait) */}
-                            <div className="block md:hidden relative" style={{ aspectRatio: '9/16' }}>
+                            {/* Mobile Banner — natural proportions, max height constrained */}
+                            <div className="block md:hidden relative" style={{ maxHeight: '70vh' }}>
                                 <AnimatePresence initial={false} custom={direction}>
                                     <motion.div
                                         key={currentIndex}
@@ -275,17 +275,17 @@ export function ReleaseOverlay() {
                                         animate="center"
                                         exit="exit"
                                         transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                                        className="absolute inset-0 w-full h-full"
+                                        className="w-full h-full z-[1] flex items-center justify-center"
                                     >
                                         {currentBanner?.mobileImage ? (
                                             <img
                                                 src={currentBanner.mobileImage}
                                                 alt={currentBanner.title}
-                                                className="w-full h-full object-cover"
+                                                className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg"
                                                 draggable={false}
                                             />
                                         ) : (
-                                            <div className="w-full h-full bg-[#1a2f47] flex items-center justify-center">
+                                            <div className="w-full h-64 bg-[#1a2f47] flex items-center justify-center rounded-lg">
                                                 <p className="text-white/50 text-sm">No mobile image</p>
                                             </div>
                                         )}
@@ -298,21 +298,21 @@ export function ReleaseOverlay() {
                                 <>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); goPrev(); }}
-                                        className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-all"
+                                        className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-all"
                                         aria-label="Previous banner"
                                     >
                                         <ChevronLeft className="w-5 h-5" />
                                     </button>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); goNext(); }}
-                                        className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-all"
+                                        className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-all"
                                         aria-label="Next banner"
                                     >
                                         <ChevronRight className="w-5 h-5" />
                                     </button>
 
                                     {/* Dot Indicators — inside carousel, bottom overlay */}
-                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-sm" onClick={(e) => e.stopPropagation()}>
+                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-white/10" onClick={(e) => e.stopPropagation()}>
                                         {banners.map((_, idx) => (
                                             <button
                                                 key={idx}
