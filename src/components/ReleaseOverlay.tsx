@@ -1,69 +1,153 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Ticket } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const SESSION_KEY = 'kirin_release_overlay_shown';
+const AUTO_SLIDE_INTERVAL = 7000;
 
-interface OverlayData {
-    desktopPoster: string | null;
-    mobilePoster: string | null;
+interface Banner {
+    title: string;
+    desktopImage: string | null;
+    mobileImage: string | null;
+    linkUrl: string;
+    order: number;
 }
 
 export function ReleaseOverlay() {
     const [isVisible, setIsVisible] = useState(false);
-    const [posterData, setPosterData] = useState<OverlayData>({ desktopPoster: null, mobilePoster: null });
+    const [banners, setBanners] = useState<Banner[]>([]);
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [direction, setDirection] = useState(0); // -1 left, 1 right
     const navigate = useNavigate();
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const dragStartX = useRef(0);
 
+    // Fetch banners from Contentful
     useEffect(() => {
-        // Only show once per browser session
         if (sessionStorage.getItem(SESSION_KEY)) return;
 
-        // Fetch poster from Contentful
-        const fetchOverlay = async () => {
+        const fetchBanners = async () => {
             try {
                 const { client } = await import('../lib/contentful');
                 const response = await client.getEntries({
-                    content_type: 'releaseOverlay',
-                    limit: 1,
+                    content_type: 'overlayBanner',
+                    order: ['fields.order'],
                 });
 
                 if (response.items.length > 0) {
-                    const item = response.items[0] as any;
-                    const getUrl = (field: any) => {
-                        const url = field?.fields?.file?.url;
-                        return url ? (url.startsWith('//') ? 'https:' + url : url) : null;
-                    };
-                    setPosterData({
-                        desktopPoster: getUrl(item.fields.desktopPoster),
-                        mobilePoster: getUrl(item.fields.mobilePoster),
+                    const formatted: Banner[] = response.items.map((item: any) => {
+                        const getUrl = (field: any) => {
+                            const url = field?.fields?.file?.url;
+                            return url ? (url.startsWith('//') ? 'https:' + url : url) : null;
+                        };
+                        return {
+                            title: item.fields.title || 'Banner',
+                            desktopImage: getUrl(item.fields.desktopImage),
+                            mobileImage: getUrl(item.fields.mobileImage),
+                            linkUrl: item.fields.linkUrl || '/',
+                            order: item.fields.order || 0,
+                        };
                     });
+                    setBanners(formatted);
                 }
             } catch (err) {
-                console.warn('ReleaseOverlay: Contentful fetch failed, using placeholders', err);
+                console.warn('ReleaseOverlay: Contentful fetch failed', err);
             }
 
             setIsVisible(true);
             document.body.style.overflow = 'hidden';
         };
 
-        fetchOverlay();
+        fetchBanners();
     }, []);
+
+    // Auto-slide timer
+    const resetTimer = useCallback(() => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        if (banners.length > 1) {
+            timerRef.current = setInterval(() => {
+                setDirection(1);
+                setCurrentIndex((prev) => (prev + 1) % banners.length);
+            }, AUTO_SLIDE_INTERVAL);
+        }
+    }, [banners.length]);
+
+    useEffect(() => {
+        if (isVisible) resetTimer();
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, [isVisible, resetTimer]);
+
+    const goTo = (index: number) => {
+        setDirection(index > currentIndex ? 1 : -1);
+        setCurrentIndex(index);
+        resetTimer();
+    };
+
+    const goNext = () => {
+        setDirection(1);
+        setCurrentIndex((prev) => (prev + 1) % banners.length);
+        resetTimer();
+    };
+
+    const goPrev = () => {
+        setDirection(-1);
+        setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
+        resetTimer();
+    };
 
     const handleClose = () => {
         setIsVisible(false);
         sessionStorage.setItem(SESSION_KEY, 'true');
         document.body.style.overflow = '';
+        if (timerRef.current) clearInterval(timerRef.current);
     };
 
-    const handleCTA = () => {
+    const handleBannerClick = (linkUrl: string) => {
         handleClose();
-        navigate('/schedule');
+        if (linkUrl.startsWith('http')) {
+            window.open(linkUrl, '_blank', 'noopener,noreferrer');
+        } else {
+            navigate(linkUrl);
+        }
     };
 
-    // Placeholder content for when no Contentful image is available
-    const PosterPlaceholder = ({ mobile = false }: { mobile?: boolean }) => (
+    // Swipe handlers
+    const handlePointerDown = (e: React.PointerEvent) => {
+        dragStartX.current = e.clientX;
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        const diff = e.clientX - dragStartX.current;
+        if (Math.abs(diff) > 60) {
+            if (diff < 0) goNext();
+            else goPrev();
+        }
+    };
+
+    // Slide animation variants
+    const slideVariants = {
+        enter: (dir: number) => ({
+            x: dir > 0 ? 300 : -300,
+            opacity: 0,
+        }),
+        center: {
+            x: 0,
+            opacity: 1,
+        },
+        exit: (dir: number) => ({
+            x: dir > 0 ? -300 : 300,
+            opacity: 0,
+        }),
+    };
+
+    const currentBanner = banners[currentIndex];
+
+    // Placeholder when no Contentful data
+    const PlaceholderBanner = ({ mobile = false }: { mobile?: boolean }) => (
         <div
             className="w-full h-full flex flex-col items-center justify-center relative"
             style={{
@@ -75,21 +159,18 @@ export function ReleaseOverlay() {
             <div
                 className="absolute inset-0 opacity-30"
                 style={{
-                    background: mobile
-                        ? 'radial-gradient(ellipse at 50% 30%, rgba(144, 205, 244, 0.35) 0%, transparent 55%), radial-gradient(ellipse at 50% 80%, rgba(246, 224, 94, 0.15) 0%, transparent 50%)'
-                        : 'radial-gradient(ellipse at 50% 40%, rgba(144, 205, 244, 0.3) 0%, transparent 60%), radial-gradient(ellipse at 70% 70%, rgba(246, 224, 94, 0.15) 0%, transparent 50%)',
+                    background: 'radial-gradient(ellipse at 50% 40%, rgba(144, 205, 244, 0.3) 0%, transparent 60%), radial-gradient(ellipse at 70% 70%, rgba(246, 224, 94, 0.15) 0%, transparent 50%)',
                 }}
             />
             <div className="relative text-center px-6 md:px-8">
                 <p className="text-[#F6E05E] text-xs md:text-base font-bold tracking-[0.3em] mb-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    ✦ NEW RELEASE ✦
+                    ✦ KIRIN DAY ✦
                 </p>
-                <h2 className={`font-black text-[#90CDF4] mb-4 ${mobile ? 'text-4xl' : 'text-4xl md:text-6xl'}`} style={{ fontFamily: 'Montserrat, sans-serif', textShadow: '0 0 40px rgba(144, 205, 244, 0.4)' }}>
-                    KIRIN DAY
+                <h2 className={`font-black text-[#90CDF4] mb-4 ${mobile ? 'text-3xl' : 'text-4xl md:text-6xl'}`} style={{ fontFamily: 'Montserrat, sans-serif', textShadow: '0 0 40px rgba(144, 205, 244, 0.4)' }}>
+                    Coming Soon
                 </h2>
-                <div className={`${mobile ? 'w-20' : 'w-24'} h-1 bg-[#F6E05E] mx-auto mb-4`} />
-                <p className={`font-bold text-white/90 ${mobile ? 'text-lg' : 'text-xl md:text-2xl'}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    3rd Single Release
+                <p className="text-sm text-white/50" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    Tambahkan banner di Contentful (overlayBanner)
                 </p>
             </div>
         </div>
@@ -112,7 +193,7 @@ export function ReleaseOverlay() {
                         onClick={handleClose}
                     />
 
-                    {/* Close Button — z-50 to stay above content */}
+                    {/* Close Button */}
                     <motion.button
                         onClick={handleClose}
                         className="absolute top-4 right-4 md:top-6 md:right-6 z-50 w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/15 border border-white/30 flex items-center justify-center text-white hover:bg-white/30 hover:scale-110 transition-all duration-300"
@@ -126,56 +207,111 @@ export function ReleaseOverlay() {
 
                     {/* Content Container */}
                     <motion.div
-                        className="relative z-10 flex flex-col items-center gap-5 md:gap-8 max-w-4xl w-full"
+                        className="relative z-10 flex flex-col items-center gap-4 max-w-4xl w-full"
                         initial={{ opacity: 0, scale: 0.85, y: 30 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: -20 }}
                         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                     >
-                        {/* Poster — Desktop (landscape) */}
+                        {/* Carousel Area */}
                         <div
-                            className="hidden md:block w-full rounded-2xl overflow-hidden border-2 border-[#90CDF4]/30 shadow-2xl shadow-[#90CDF4]/20"
-                            style={{ aspectRatio: '16/9' }}
+                            className="relative w-full overflow-hidden rounded-2xl border-2 border-[#90CDF4]/30 shadow-2xl shadow-[#90CDF4]/20 cursor-pointer select-none"
+                            onPointerDown={handlePointerDown}
+                            onPointerUp={handlePointerUp}
                         >
-                            {posterData.desktopPoster ? (
-                                <img
-                                    src={posterData.desktopPoster}
-                                    alt="Kirin Day - 3rd Single Release"
-                                    className="w-full h-full object-cover"
-                                />
-                            ) : (
-                                <PosterPlaceholder />
+                            {/* Desktop Banner (landscape) */}
+                            <div className="hidden md:block" style={{ aspectRatio: '16/9' }}>
+                                <AnimatePresence initial={false} custom={direction} mode="wait">
+                                    <motion.div
+                                        key={currentIndex}
+                                        custom={direction}
+                                        variants={slideVariants}
+                                        initial="enter"
+                                        animate="center"
+                                        exit="exit"
+                                        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+                                        className="w-full h-full absolute inset-0"
+                                        onClick={() => currentBanner && handleBannerClick(currentBanner.linkUrl)}
+                                    >
+                                        {currentBanner?.desktopImage ? (
+                                            <img
+                                                src={currentBanner.desktopImage}
+                                                alt={currentBanner.title}
+                                                className="w-full h-full object-cover"
+                                                draggable={false}
+                                            />
+                                        ) : (
+                                            <PlaceholderBanner />
+                                        )}
+                                    </motion.div>
+                                </AnimatePresence>
+                            </div>
+
+                            {/* Mobile Banner (portrait) */}
+                            <div className="block md:hidden" style={{ aspectRatio: '9/16', maxHeight: '65vh' }}>
+                                <AnimatePresence initial={false} custom={direction} mode="wait">
+                                    <motion.div
+                                        key={currentIndex}
+                                        custom={direction}
+                                        variants={slideVariants}
+                                        initial="enter"
+                                        animate="center"
+                                        exit="exit"
+                                        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+                                        className="w-full h-full absolute inset-0"
+                                        onClick={() => currentBanner && handleBannerClick(currentBanner.linkUrl)}
+                                    >
+                                        {currentBanner?.mobileImage ? (
+                                            <img
+                                                src={currentBanner.mobileImage}
+                                                alt={currentBanner.title}
+                                                className="w-full h-full object-cover"
+                                                draggable={false}
+                                            />
+                                        ) : (
+                                            <PlaceholderBanner mobile />
+                                        )}
+                                    </motion.div>
+                                </AnimatePresence>
+                            </div>
+
+                            {/* Navigation Arrows (desktop only, 2+ banners) */}
+                            {banners.length > 1 && (
+                                <>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); goPrev(); }}
+                                        className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-all"
+                                        aria-label="Previous banner"
+                                    >
+                                        <ChevronLeft className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); goNext(); }}
+                                        className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-all"
+                                        aria-label="Next banner"
+                                    >
+                                        <ChevronRight className="w-5 h-5" />
+                                    </button>
+                                </>
                             )}
                         </div>
 
-                        {/* Poster — Mobile (portrait) */}
-                        <div
-                            className="block md:hidden w-full max-w-xs mx-auto rounded-2xl overflow-hidden border-2 border-[#90CDF4]/30 shadow-2xl shadow-[#90CDF4]/20"
-                            style={{ aspectRatio: '9/16', maxHeight: '65vh' }}
-                        >
-                            {posterData.mobilePoster ? (
-                                <img
-                                    src={posterData.mobilePoster}
-                                    alt="Kirin Day - 3rd Single Release"
-                                    className="w-full h-full object-cover"
-                                />
-                            ) : (
-                                <PosterPlaceholder mobile />
-                            )}
-                        </div>
-
-                        {/* CTA Button */}
-                        <motion.button
-                            onClick={handleCTA}
-                            className="flex items-center gap-3 px-8 py-3 md:px-10 md:py-4 rounded-full bg-[#F6E05E] text-[#1a2f47] font-black text-base md:text-lg hover:scale-105 hover:shadow-xl hover:shadow-[#F6E05E]/30 transition-all duration-300"
-                            style={{ fontFamily: 'Montserrat, sans-serif' }}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.4, duration: 0.5 }}
-                        >
-                            <Ticket className="w-5 h-5" />
-                            LIHAT EVENT
-                        </motion.button>
+                        {/* Dot Indicators (2+ banners) */}
+                        {banners.length > 1 && (
+                            <div className="flex items-center gap-2">
+                                {banners.map((_, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => goTo(idx)}
+                                        className={`rounded-full transition-all duration-300 ${idx === currentIndex
+                                                ? 'w-8 h-2.5 bg-[#F6E05E]'
+                                                : 'w-2.5 h-2.5 bg-white/30 hover:bg-white/50'
+                                            }`}
+                                        aria-label={`Go to banner ${idx + 1}`}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </motion.div>
                 </motion.div>
             )}
