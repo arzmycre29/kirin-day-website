@@ -218,7 +218,7 @@ export function ReleaseOverlay() {
 
                     {/* Content Container */}
                     <motion.div
-                        className="relative z-10 flex flex-col items-center gap-4 max-w-4xl w-full"
+                        className="relative z-10 flex flex-col items-center max-w-4xl w-full max-h-[85vh]"
                         initial={{ opacity: 0, scale: 0.85, y: 30 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: -20 }}
@@ -265,7 +265,7 @@ export function ReleaseOverlay() {
                             </div>
 
                             {/* Mobile Banner (portrait) */}
-                            <div className="block md:hidden relative" style={{ aspectRatio: '9/16', maxHeight: '65vh' }}>
+                            <div className="block md:hidden relative" style={{ aspectRatio: '9/16' }}>
                                 <AnimatePresence initial={false} custom={direction}>
                                     <motion.div
                                         key={currentIndex}
@@ -293,7 +293,7 @@ export function ReleaseOverlay() {
                                 </AnimatePresence>
                             </div>
 
-                            {/* Navigation Arrows (desktop, 2+ banners) */}
+                            {/* Navigation Arrows + Dots inside carousel (2+ banners) */}
                             {banners.length > 1 && (
                                 <>
                                     <button
@@ -310,26 +310,26 @@ export function ReleaseOverlay() {
                                     >
                                         <ChevronRight className="w-5 h-5" />
                                     </button>
+
+                                    {/* Dot Indicators — inside carousel, bottom overlay */}
+                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-sm" onClick={(e) => e.stopPropagation()}>
+                                        {banners.map((_, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => goTo(idx)}
+                                                className={`rounded-full transition-all duration-300 ${idx === currentIndex
+                                                    ? 'w-7 h-2.5 bg-[#F6E05E] shadow-lg shadow-[#F6E05E]/30'
+                                                    : 'w-2.5 h-2.5 bg-white/50 hover:bg-white/70'
+                                                    }`}
+                                                aria-label={`Go to banner ${idx + 1}`}
+                                            />
+                                        ))}
+                                    </div>
                                 </>
                             )}
                         </div>
 
-                        {/* Dot Indicators (2+ banners) */}
-                        {banners.length > 1 && (
-                            <div className="flex items-center justify-center gap-2 mt-2">
-                                {banners.map((_, idx) => (
-                                    <button
-                                        key={idx}
-                                        onClick={() => goTo(idx)}
-                                        className={`rounded-full transition-all duration-300 ${idx === currentIndex
-                                                ? 'w-8 h-3 bg-[#F6E05E] shadow-lg shadow-[#F6E05E]/30'
-                                                : 'w-3 h-3 bg-white/40 hover:bg-white/60'
-                                            }`}
-                                        aria-label={`Go to banner ${idx + 1}`}
-                                    />
-                                ))}
-                            </div>
-                        )}
+
                     </motion.div>
                 </motion.div>
             )}
