@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 
 const SESSION_KEY = 'kirin_release_overlay_shown';
 const AUTO_SLIDE_INTERVAL = 7000;
+const SWIPE_THRESHOLD = 50;
 
 interface Banner {
     title: string;
@@ -19,10 +20,12 @@ export function ReleaseOverlay() {
     const [isVisible, setIsVisible] = useState(false);
     const [banners, setBanners] = useState<Banner[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [direction, setDirection] = useState(0); // -1 left, 1 right
+    const [direction, setDirection] = useState(0);
     const navigate = useNavigate();
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const dragStartX = useRef(0);
+    const touchStartX = useRef(0);
+    const touchEndX = useRef(0);
+    const isDragging = useRef(false);
 
     // Fetch banners from Contentful
     useEffect(() => {
@@ -51,13 +54,15 @@ export function ReleaseOverlay() {
                         };
                     });
                     setBanners(formatted);
+                    // Only show overlay if there are banners
+                    setIsVisible(true);
+                    document.body.style.overflow = 'hidden';
                 }
+                // If no banners → don't show overlay at all
             } catch (err) {
                 console.warn('ReleaseOverlay: Contentful fetch failed', err);
+                // Don't show overlay if fetch fails
             }
-
-            setIsVisible(true);
-            document.body.style.overflow = 'hidden';
         };
 
         fetchBanners();
@@ -75,29 +80,31 @@ export function ReleaseOverlay() {
     }, [banners.length]);
 
     useEffect(() => {
-        if (isVisible) resetTimer();
+        if (isVisible && banners.length > 1) resetTimer();
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [isVisible, resetTimer]);
+    }, [isVisible, resetTimer, banners.length]);
 
-    const goTo = (index: number) => {
+    const goTo = useCallback((index: number) => {
         setDirection(index > currentIndex ? 1 : -1);
         setCurrentIndex(index);
         resetTimer();
-    };
+    }, [currentIndex, resetTimer]);
 
-    const goNext = () => {
+    const goNext = useCallback(() => {
+        if (banners.length <= 1) return;
         setDirection(1);
         setCurrentIndex((prev) => (prev + 1) % banners.length);
         resetTimer();
-    };
+    }, [banners.length, resetTimer]);
 
-    const goPrev = () => {
+    const goPrev = useCallback(() => {
+        if (banners.length <= 1) return;
         setDirection(-1);
         setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
         resetTimer();
-    };
+    }, [banners.length, resetTimer]);
 
     const handleClose = () => {
         setIsVisible(false);
@@ -106,75 +113,79 @@ export function ReleaseOverlay() {
         if (timerRef.current) clearInterval(timerRef.current);
     };
 
-    const handleBannerClick = (linkUrl: string) => {
+    const handleBannerClick = () => {
+        if (isDragging.current) return; // Don't navigate if was swiping
+        const banner = banners[currentIndex];
+        if (!banner) return;
         handleClose();
-        if (linkUrl.startsWith('http')) {
-            window.open(linkUrl, '_blank', 'noopener,noreferrer');
+        if (banner.linkUrl.startsWith('http')) {
+            window.open(banner.linkUrl, '_blank', 'noopener,noreferrer');
         } else {
-            navigate(linkUrl);
+            navigate(banner.linkUrl);
         }
     };
 
-    // Swipe handlers
-    const handlePointerDown = (e: React.PointerEvent) => {
-        dragStartX.current = e.clientX;
+    // Touch/swipe handlers
+    const handleTouchStart = (e: React.TouchEvent) => {
+        touchStartX.current = e.touches[0].clientX;
+        touchEndX.current = e.touches[0].clientX;
+        isDragging.current = false;
     };
 
-    const handlePointerUp = (e: React.PointerEvent) => {
-        const diff = e.clientX - dragStartX.current;
-        if (Math.abs(diff) > 60) {
-            if (diff < 0) goNext();
+    const handleTouchMove = (e: React.TouchEvent) => {
+        touchEndX.current = e.touches[0].clientX;
+        if (Math.abs(touchEndX.current - touchStartX.current) > 10) {
+            isDragging.current = true;
+        }
+    };
+
+    const handleTouchEnd = () => {
+        const diff = touchStartX.current - touchEndX.current;
+        if (Math.abs(diff) > SWIPE_THRESHOLD) {
+            if (diff > 0) goNext(); // Swipe left → next
+            else goPrev(); // Swipe right → prev
+        }
+        // Reset drag flag after a short delay so click handler can check it
+        setTimeout(() => { isDragging.current = false; }, 50);
+    };
+
+    // Mouse drag handlers (for desktop)
+    const handleMouseDown = (e: React.MouseEvent) => {
+        touchStartX.current = e.clientX;
+        touchEndX.current = e.clientX;
+        isDragging.current = false;
+    };
+
+    const handleMouseUp = (e: React.MouseEvent) => {
+        touchEndX.current = e.clientX;
+        const diff = touchStartX.current - touchEndX.current;
+        if (Math.abs(diff) > SWIPE_THRESHOLD) {
+            isDragging.current = true;
+            if (diff > 0) goNext();
             else goPrev();
         }
+        setTimeout(() => { isDragging.current = false; }, 50);
     };
 
-    // Slide animation variants
+    // Pure slide animation — no fade, slides like connected panels
     const slideVariants = {
         enter: (dir: number) => ({
-            x: dir > 0 ? 300 : -300,
-            opacity: 0,
+            x: dir > 0 ? '100%' : '-100%',
         }),
         center: {
             x: 0,
-            opacity: 1,
         },
         exit: (dir: number) => ({
-            x: dir > 0 ? -300 : 300,
-            opacity: 0,
+            x: dir > 0 ? '-100%' : '100%',
         }),
     };
 
     const currentBanner = banners[currentIndex];
 
-    // Placeholder when no Contentful data
-    const PlaceholderBanner = ({ mobile = false }: { mobile?: boolean }) => (
-        <div
-            className="w-full h-full flex flex-col items-center justify-center relative"
-            style={{
-                background: mobile
-                    ? 'linear-gradient(180deg, #0f1a2a 0%, #1a2f47 25%, #152238 50%, #1a2f47 75%, #0f1a2a 100%)'
-                    : 'linear-gradient(135deg, #0f1a2a 0%, #1a2f47 30%, #152238 60%, #1a2f47 100%)',
-            }}
-        >
-            <div
-                className="absolute inset-0 opacity-30"
-                style={{
-                    background: 'radial-gradient(ellipse at 50% 40%, rgba(144, 205, 244, 0.3) 0%, transparent 60%), radial-gradient(ellipse at 70% 70%, rgba(246, 224, 94, 0.15) 0%, transparent 50%)',
-                }}
-            />
-            <div className="relative text-center px-6 md:px-8">
-                <p className="text-[#F6E05E] text-xs md:text-base font-bold tracking-[0.3em] mb-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    ✦ KIRIN DAY ✦
-                </p>
-                <h2 className={`font-black text-[#90CDF4] mb-4 ${mobile ? 'text-3xl' : 'text-4xl md:text-6xl'}`} style={{ fontFamily: 'Montserrat, sans-serif', textShadow: '0 0 40px rgba(144, 205, 244, 0.4)' }}>
-                    Coming Soon
-                </h2>
-                <p className="text-sm text-white/50" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    Tambahkan banner di Contentful (overlayBanner)
-                </p>
-            </div>
-        </div>
-    );
+    // Don't render anything if not visible
+    if (!isVisible || banners.length === 0) {
+        return null;
+    }
 
     return createPortal(
         <AnimatePresence>
@@ -216,12 +227,17 @@ export function ReleaseOverlay() {
                         {/* Carousel Area */}
                         <div
                             className="relative w-full overflow-hidden rounded-2xl border-2 border-[#90CDF4]/30 shadow-2xl shadow-[#90CDF4]/20 cursor-pointer select-none"
-                            onPointerDown={handlePointerDown}
-                            onPointerUp={handlePointerUp}
+                            style={{ touchAction: 'pan-y' }}
+                            onTouchStart={handleTouchStart}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={handleTouchEnd}
+                            onMouseDown={handleMouseDown}
+                            onMouseUp={handleMouseUp}
+                            onClick={handleBannerClick}
                         >
                             {/* Desktop Banner (landscape) */}
-                            <div className="hidden md:block" style={{ aspectRatio: '16/9' }}>
-                                <AnimatePresence initial={false} custom={direction} mode="wait">
+                            <div className="hidden md:block relative" style={{ aspectRatio: '16/9' }}>
+                                <AnimatePresence initial={false} custom={direction}>
                                     <motion.div
                                         key={currentIndex}
                                         custom={direction}
@@ -229,9 +245,8 @@ export function ReleaseOverlay() {
                                         initial="enter"
                                         animate="center"
                                         exit="exit"
-                                        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-                                        className="w-full h-full absolute inset-0"
-                                        onClick={() => currentBanner && handleBannerClick(currentBanner.linkUrl)}
+                                        transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+                                        className="absolute inset-0 w-full h-full"
                                     >
                                         {currentBanner?.desktopImage ? (
                                             <img
@@ -241,15 +256,17 @@ export function ReleaseOverlay() {
                                                 draggable={false}
                                             />
                                         ) : (
-                                            <PlaceholderBanner />
+                                            <div className="w-full h-full bg-[#1a2f47] flex items-center justify-center">
+                                                <p className="text-white/50 text-sm">No desktop image</p>
+                                            </div>
                                         )}
                                     </motion.div>
                                 </AnimatePresence>
                             </div>
 
                             {/* Mobile Banner (portrait) */}
-                            <div className="block md:hidden" style={{ aspectRatio: '9/16', maxHeight: '65vh' }}>
-                                <AnimatePresence initial={false} custom={direction} mode="wait">
+                            <div className="block md:hidden relative" style={{ aspectRatio: '9/16', maxHeight: '65vh' }}>
+                                <AnimatePresence initial={false} custom={direction}>
                                     <motion.div
                                         key={currentIndex}
                                         custom={direction}
@@ -257,9 +274,8 @@ export function ReleaseOverlay() {
                                         initial="enter"
                                         animate="center"
                                         exit="exit"
-                                        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-                                        className="w-full h-full absolute inset-0"
-                                        onClick={() => currentBanner && handleBannerClick(currentBanner.linkUrl)}
+                                        transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+                                        className="absolute inset-0 w-full h-full"
                                     >
                                         {currentBanner?.mobileImage ? (
                                             <img
@@ -269,13 +285,15 @@ export function ReleaseOverlay() {
                                                 draggable={false}
                                             />
                                         ) : (
-                                            <PlaceholderBanner mobile />
+                                            <div className="w-full h-full bg-[#1a2f47] flex items-center justify-center">
+                                                <p className="text-white/50 text-sm">No mobile image</p>
+                                            </div>
                                         )}
                                     </motion.div>
                                 </AnimatePresence>
                             </div>
 
-                            {/* Navigation Arrows (desktop only, 2+ banners) */}
+                            {/* Navigation Arrows (desktop, 2+ banners) */}
                             {banners.length > 1 && (
                                 <>
                                     <button
@@ -298,14 +316,14 @@ export function ReleaseOverlay() {
 
                         {/* Dot Indicators (2+ banners) */}
                         {banners.length > 1 && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-center gap-2 mt-2">
                                 {banners.map((_, idx) => (
                                     <button
                                         key={idx}
                                         onClick={() => goTo(idx)}
                                         className={`rounded-full transition-all duration-300 ${idx === currentIndex
-                                                ? 'w-8 h-2.5 bg-[#F6E05E]'
-                                                : 'w-2.5 h-2.5 bg-white/30 hover:bg-white/50'
+                                                ? 'w-8 h-3 bg-[#F6E05E] shadow-lg shadow-[#F6E05E]/30'
+                                                : 'w-3 h-3 bg-white/40 hover:bg-white/60'
                                             }`}
                                         aria-label={`Go to banner ${idx + 1}`}
                                     />
