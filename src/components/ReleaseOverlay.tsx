@@ -192,7 +192,7 @@ export function ReleaseOverlay() {
             {isVisible && (
                 <motion.div
                     className="fixed inset-0 flex items-center justify-center p-4 md:p-8"
-                    style={{ zIndex: 2147483647 }}
+                    style={{ zIndex: 999999 }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -216,6 +216,28 @@ export function ReleaseOverlay() {
                         <X className="w-5 h-5 md:w-6 md:h-6" />
                     </motion.button>
 
+                    {/* Navigation Arrows (Desktop) - Viewport Level */}
+                    {banners.length > 1 && (
+                        <>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); goPrev(); }}
+                                className="hidden md:flex absolute left-4 md:left-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-[#0EA5E9] hover:bg-[#0284C7] shadow-lg shadow-black/20 items-center justify-center text-white transition-all hover:scale-110"
+                                style={{ zIndex: 100 }}
+                                aria-label="Previous banner"
+                            >
+                                <ChevronLeft className="w-7 h-7" />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); goNext(); }}
+                                className="hidden md:flex absolute right-4 md:right-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-[#0EA5E9] hover:bg-[#0284C7] shadow-lg shadow-black/20 items-center justify-center text-white transition-all hover:scale-110"
+                                style={{ zIndex: 100 }}
+                                aria-label="Next banner"
+                            >
+                                <ChevronRight className="w-7 h-7" />
+                            </button>
+                        </>
+                    )}
+
                     {/* Content Container */}
                     <motion.div
                         className="relative z-10 flex flex-col items-center max-w-4xl w-full max-h-[85vh]"
@@ -225,8 +247,9 @@ export function ReleaseOverlay() {
                         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                     >
                         {/* Carousel Area */}
+                        {/* Carousel Area (Desktop) */}
                         <div
-                            className="relative w-full overflow-hidden rounded-2xl border-2 border-[#90CDF4]/30 shadow-2xl shadow-[#90CDF4]/20 cursor-pointer select-none"
+                            className="relative w-full overflow-hidden rounded-2xl border-2 border-[#90CDF4]/30 shadow-2xl shadow-[#90CDF4]/20 cursor-pointer select-none hidden md:block"
                             style={{ touchAction: 'pan-y' }}
                             onTouchStart={handleTouchStart}
                             onTouchMove={handleTouchMove}
@@ -236,7 +259,7 @@ export function ReleaseOverlay() {
                             onClick={handleBannerClick}
                         >
                             {/* Desktop Banner (landscape) */}
-                            <div className="hidden md:block relative" style={{ aspectRatio: '16/9' }}>
+                            <div className="relative" style={{ aspectRatio: '16/9' }}>
                                 <AnimatePresence initial={false} custom={direction}>
                                     <motion.div
                                         key={currentIndex}
@@ -263,72 +286,79 @@ export function ReleaseOverlay() {
                                     </motion.div>
                                 </AnimatePresence>
                             </div>
+                        </div>
 
-                            {/* Mobile Banner — natural proportions, max height constrained */}
-                            <div className="block md:hidden relative w-full h-[65vh]">
-                                <AnimatePresence initial={false} custom={direction}>
-                                    <motion.div
-                                        key={currentIndex}
-                                        custom={direction}
-                                        variants={slideVariants}
-                                        initial="enter"
-                                        animate="center"
-                                        exit="exit"
-                                        transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                                        className="absolute inset-0 w-full h-full z-[1] flex items-center justify-center"
-                                    >
-                                        {currentBanner?.mobileImage ? (
-                                            <img
-                                                src={currentBanner.mobileImage}
-                                                alt={currentBanner.title}
-                                                className="w-full h-full object-contain rounded-lg"
-                                                draggable={false}
-                                            />
-                                        ) : (
-                                            <div className="w-full h-64 bg-[#1a2f47] flex items-center justify-center rounded-lg">
-                                                <p className="text-white/50 text-sm">No mobile image</p>
-                                            </div>
-                                        )}
-                                    </motion.div>
-                                </AnimatePresence>
-                            </div>
 
-                            {/* Navigation Arrows + Dots inside carousel (2+ banners) */}
+
+                        {/* Mobile Banner - Outside desktop overflow container, own container */}
+                        <div
+                            className="block md:hidden relative w-full max-w-sm mx-auto overflow-hidden rounded-xl border-2 border-[#90CDF4]/30 shadow-2xl shadow-[#90CDF4]/20"
+                            style={{ aspectRatio: '4/5' }}
+                            onTouchStart={handleTouchStart}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={handleTouchEnd}
+                            onClick={handleBannerClick}
+                        >
+                            <AnimatePresence initial={false} custom={direction}>
+                                <motion.div
+                                    key={currentIndex}
+                                    custom={direction}
+                                    variants={slideVariants}
+                                    initial="enter"
+                                    animate="center"
+                                    exit="exit"
+                                    transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+                                    className="absolute inset-0 w-full h-full z-[1]"
+                                >
+                                    {currentBanner?.mobileImage ? (
+                                        <img
+                                            src={currentBanner.mobileImage}
+                                            alt={currentBanner.title}
+                                            className="w-full h-full object-cover"
+                                            draggable={false}
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full bg-[#1a2f47] flex items-center justify-center">
+                                            <p className="text-white/50 text-sm">No mobile image</p>
+                                        </div>
+                                    )}
+                                </motion.div>
+                            </AnimatePresence>
+
+                            {/* Mobile Dots */}
                             {banners.length > 1 && (
-                                <>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); goPrev(); }}
-                                        className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-[100] w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-all"
-                                        aria-label="Previous banner"
-                                    >
-                                        <ChevronLeft className="w-5 h-5" />
-                                    </button>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); goNext(); }}
-                                        className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 z-[100] w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 items-center justify-center text-white/80 hover:bg-black/60 hover:text-white transition-all"
-                                        aria-label="Next banner"
-                                    >
-                                        <ChevronRight className="w-5 h-5" />
-                                    </button>
-
-                                    {/* Dot Indicators — inside carousel, bottom overlay */}
-                                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-white/10" onClick={(e) => e.stopPropagation()}>
-                                        {banners.map((_, idx) => (
-                                            <button
-                                                key={idx}
-                                                onClick={() => goTo(idx)}
-                                                className={`rounded-full transition-all duration-300 ${idx === currentIndex
-                                                    ? 'w-7 h-2.5 bg-[#F6E05E] shadow-lg shadow-[#F6E05E]/30'
-                                                    : 'w-2.5 h-2.5 bg-white/50 hover:bg-white/70'
-                                                    }`}
-                                                aria-label={`Go to banner ${idx + 1}`}
-                                            />
-                                        ))}
-                                    </div>
-                                </>
+                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-white/10" style={{ zIndex: 100 }} onClick={(e) => e.stopPropagation()}>
+                                    {banners.map((_, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => goTo(idx)}
+                                            className={`rounded-full transition-all duration-300 ${idx === currentIndex
+                                                ? 'w-7 h-2.5 bg-[#F6E05E] shadow-lg shadow-[#F6E05E]/30'
+                                                : 'w-2.5 h-2.5 bg-white/50 hover:bg-white/70'
+                                                }`}
+                                            aria-label={`Go to banner ${idx + 1}`}
+                                        />
+                                    ))}
+                                </div>
                             )}
                         </div>
 
+                        {/* Desktop Dots - Below image */}
+                        {banners.length > 1 && (
+                            <div className="hidden md:flex absolute -bottom-10 left-1/2 -translate-x-1/2 items-center gap-2" style={{ zIndex: 100 }} onClick={(e) => e.stopPropagation()}>
+                                {banners.map((_, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => goTo(idx)}
+                                        className={`rounded-full transition-all duration-300 ${idx === currentIndex
+                                            ? 'w-7 h-2.5 bg-[#F6E05E] shadow-lg shadow-[#F6E05E]/30'
+                                            : 'w-2.5 h-2.5 bg-white/30 hover:bg-white/60'
+                                            }`}
+                                        aria-label={`Go to banner ${idx + 1}`}
+                                    />
+                                ))}
+                            </div>
+                        )}
 
                     </motion.div>
                 </motion.div>
