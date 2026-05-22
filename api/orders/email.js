@@ -1,5 +1,12 @@
 // Cwd: d:/ProjectApp/Kirin Day Web/api/orders/email.js
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+
+// Force IPv4 resolution over IPv6 to prevent ENETUNREACH on environments without IPv6 routing (like Render)
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 require('dotenv').config();
 
 const smtpHost = process.env.SMTP_HOST;
