@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
 import { Navigation } from './components/Navigation';
 import { Footer } from './components/Footer';
@@ -7,8 +7,13 @@ import { AboutPage } from './components/pages/AboutPage';
 import { MembersPage } from './components/pages/MembersPage';
 import { MusicPage } from './components/pages/MusicPage';
 import { SchedulePage } from './components/pages/SchedulePage';
-import { ShopPage } from './components/pages/ShopPage';
 import { MediaPage } from './components/pages/MediaPage';
+import { BuyPage } from './components/pages/buy/BuyPage';
+import { OrderStatusPage } from './components/pages/buy/OrderStatusPage';
+import { AdminLoginPage } from './components/pages/buy/AdminLoginPage';
+import { AdminOrdersPage } from './components/pages/buy/AdminOrdersPage';
+import { AdminSettingsPage } from './components/pages/buy/AdminSettingsPage';
+import { ShopPageBackup } from './components/pages/ShopPageBackup';
 import { AudioProvider } from './context/AudioContext';
 import { FloatingMusicPlayer } from './components/FloatingMusicPlayer';
 import { PageTransition } from './components/PageTransition';
@@ -40,7 +45,14 @@ export default function App() {
             <Route path="/music" element={<PageTransition><MusicPage /></PageTransition>} />
             <Route path="/schedule" element={<PageTransition><SchedulePage /></PageTransition>} />
             <Route path="/media" element={<PageTransition><MediaPage /></PageTransition>} />
-            <Route path="/shop" element={<PageTransition><ShopPage /></PageTransition>} />
+            <Route path="/shop" element={<PageTransition><BuyPage /></PageTransition>} />
+            <Route path="/buy" element={<PageTransition><BuyPage /></PageTransition>} />
+            <Route path="/buy/status" element={<PageTransition><OrderStatusPage /></PageTransition>} />
+            <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
+            <Route path="/admin/login" element={<PageTransition><AdminLoginPage /></PageTransition>} />
+            <Route path="/admin/orders" element={<PageTransition><AdminOrdersPage /></PageTransition>} />
+            <Route path="/admin/event-po-setting" element={<PageTransition><AdminSettingsPage /></PageTransition>} />
+            <Route path="/shop-legacy" element={<PageTransition><ShopPageBackup /></PageTransition>} />
             <Route path="*" element={<PageTransition><HomePage /></PageTransition>} />
           </Routes>
         </AnimatePresence>

@@ -1,0 +1,61 @@
+{
+  "members": [
+    { "id": "akari", "name": "Akari", "photoUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&fit=crop&q=80", "isActive": true },
+    { "id": "haruka", "name": "Haruka", "photoUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&fit=crop&q=80", "isActive": true },
+    { "id": "rena", "name": "Rena", "photoUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&fit=crop&q=80", "isActive": true },
+    { "id": "yuki", "name": "Yuki", "photoUrl": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&fit=crop&q=80", "isActive": true },
+    { "id": "miku", "name": "Miku", "photoUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&fit=crop&q=80", "isActive": true },
+    { "id": "yui", "name": "Yui", "photoUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&fit=crop&q=80", "isActive": true },
+    { "id": "sora", "name": "Sora", "photoUrl": "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&fit=crop&q=80", "isActive": false }
+  ],
+  "merch": [
+    { "id": "tshirt", "name": "Official T-Shirt Kirin Day - Tenkaichi", "price": 150000, "photoUrl": "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=400&fit=crop&q=80", "stock": 50, "isActive": true },
+    { "id": "lightstick", "name": "Kirin Day Sparkle Lightstick", "price": 100000, "photoUrl": "https://images.unsplash.com/photo-1563245372-f21724e3856d?w=400&fit=crop&q=80", "stock": 30, "isActive": true },
+    { "id": "photocard", "name": "Exclusive Photo Card Pack (Random 5pcs)", "price": 45000, "photoUrl": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&fit=crop&q=80", "stock": 100, "isActive": true },
+    { "id": "hoodie", "name": "Official Black Hoodie Kirin Day", "price": 250000, "photoUrl": "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&fit=crop&q=80", "stock": 0, "isActive": true },
+    { "id": "poster", "name": "Signed A2 Debut Poster", "price": 30000, "photoUrl": "https://images.unsplash.com/photo-1580136579312-94651dfd596d?w=400&fit=crop&q=80", "stock": 15, "isActive": false }
+  ],
+  "chekiPrices": {
+    "twoShot": 75000,
+    "solo": 50000,
+    "group": 120000
+  },
+  "chekiTypes": ["Two Shot", "Solo", "Group"],
+  "maxChekiPerMemberPerType": 10,
+  "maxMerchPerItem": 20,
+  "paymentMethods": [
+    {
+      "id": "qris",
+      "label": "QRIS (Gopay, OVO, Dana, LinkAja)",
+      "type": "qris",
+      "accountName": "Kirin Day Management",
+      "accountNumber": "N/A",
+      "qrImageUrl": "https://images.unsplash.com/photo-1595079676339-1534801ad6cf?w=400&fit=crop&q=80"
+    },
+    {
+      "id": "bca",
+      "label": "Transfer Bank BCA",
+      "type": "bank_transfer",
+      "accountName": "Kirin Day Management",
+      "accountNumber": "7770981234",
+      "qrImageUrl": ""
+    },
+    {
+      "id": "mandiri",
+      "label": "Transfer Bank Mandiri",
+      "type": "bank_transfer",
+      "accountName": "Kirin Day Management",
+      "accountNumber": "1310009876543",
+      "qrImageUrl": ""
+    }
+  ],
+  "eventInfo": {
+    "name": "Kirin Day 3rd Anniversary: Tenkaichi Moriagari",
+    "date": "Sabtu, 30 Mei 2026",
+    "location": "Istana BEC Floor 3A, Bandung",
+    "isActive": true
+  },
+  "orderIdPrefix": "CK",
+  "paymentProofMaxSizeMB": 5,
+  "verificationSLAHours": 24
+}

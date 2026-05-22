@@ -113,7 +113,7 @@ export function HeroSection({ onStreamClick }: HeroSectionProps) {
                   style={{ opacity: isHovered ? 0 : 1 }}
                 >
                   <span
-                    className="text-white text-2xl lg:text-4xl font-black tracking-[0.3em] uppercase"
+                    className="text-white text-xl lg:text-2xl font-black tracking-[0.2em] uppercase"
                     style={{
                       fontFamily: 'Montserrat, sans-serif',
                       writingMode: 'vertical-rl',
@@ -156,7 +156,7 @@ export function HeroSection({ onStreamClick }: HeroSectionProps) {
       <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-end">
         {/* Gradient background */}
         <div
-          className="pointer-events-auto"
+          className="pointer-events-none"
           style={{
             background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.35) 60%, transparent 100%)',
             paddingTop: '120px'
