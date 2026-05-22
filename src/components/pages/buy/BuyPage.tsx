@@ -696,7 +696,14 @@ export function BuyPage() {
         body: formData
       });
 
-      const resData = await response.json();
+      let resData: any = {};
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        resData = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(text || `Terjadi kesalahan server (${response.status})`);
+      }
 
       if (!response.ok) {
         throw new Error(resData.error || 'Gagal mengirimkan pesanan.');

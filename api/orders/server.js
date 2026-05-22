@@ -307,10 +307,13 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
       `${getAppUrl(req)}/buy/status?id=${orderId}\n\n` +
       `Terima kasih atas dukungannya!\n\nSalam,\nKirin Day Management`;
 
-    await sendEmail({
+    // 9. Send Confirmation Email to Buyer (Background Task)
+    sendEmail({
       to: buyer_email,
       subject: `[Order #${orderId}] Pesananmu sudah kami terima!`,
       body: emailBody
+    }).catch(err => {
+      console.error(`Gagal mengirim email konfirmasi latar belakang untuk order ${orderId}:`, err);
     });
 
     // Success response
@@ -330,7 +333,7 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
 
 // Route: Get all orders (Admin)
 app.get('/api/orders', adminAuth, async (req, res) => {
-  const { status, search, page = 1 } = req.query;
+  const { status, search, page = 1, show_archived = 'false' } = req.query;
   const limit = 20;
   const offset = (parseInt(page, 10) - 1) * limit;
 
@@ -342,6 +345,11 @@ app.get('/api/orders', adminAuth, async (req, res) => {
     // Filter status
     if (status && status !== 'all') {
       query = query.eq('status', status.toLowerCase());
+    }
+
+    // Filter is_archived
+    if (show_archived !== 'true') {
+      query = query.eq('is_archived', false);
     }
 
     // Search term
@@ -437,10 +445,13 @@ app.put('/api/orders/:id', adminAuth, async (req, res) => {
         `Terima kasih.\n\nSalam,\nKirin Day Management`;
     }
 
-    await sendEmail({
+    // 3. Send Notification Email to Buyer (Background Task)
+    sendEmail({
       to: order.buyer_email,
       subject: emailSubject,
       body: emailBody
+    }).catch(err => {
+      console.error(`Gagal mengirim email update status latar belakang untuk order ${id}:`, err);
     });
 
     res.json({
@@ -525,10 +536,10 @@ app.get('/api/orders/backup-zip', adminAuth, async (req, res) => {
   }
 });
 
-// Route: Purge verified payment proofs from storage (Admin)
+// Route: Purge verified payment proofs from storage and Archive (Admin)
 app.post('/api/orders/purge-proofs', adminAuth, async (req, res) => {
   try {
-    // 1. Fetch all orders that are approved/rejected and still have an active proof URL
+    // 1. Fetch all orders that are approved/rejected
     const { data: ordersToPurge, error: fetchErr } = await supabase
       .from('orders')
       .select('*')
@@ -540,51 +551,59 @@ app.post('/api/orders/purge-proofs', adminAuth, async (req, res) => {
     let purgeCount = 0;
 
     for (const order of ordersToPurge) {
-      if (!order.payment_proof_url || order.payment_proof_url.includes('placeholder') || order.payment_proof_url.includes('Arsip') || order.payment_proof_url.includes('via.placeholder.com')) {
-        continue; // Already purged or placeholder
+      const isPlaceholder = !order.payment_proof_url || 
+        order.payment_proof_url.includes('placeholder') || 
+        order.payment_proof_url.includes('Arsip') || 
+        order.payment_proof_url.includes('via.placeholder.com');
+
+      if (!isPlaceholder) {
+        // Extract storage path from public URL
+        const parts = order.payment_proof_url.split(`/${bucketName}/`);
+        if (parts.length > 1) {
+          const filePath = parts[1]; // e.g. proofs/CK-...
+          
+          // Delete from storage
+          const { error: deleteErr } = await supabase.storage
+            .from(bucketName)
+            .remove([filePath]);
+
+          if (deleteErr) {
+            console.error(`Gagal menghapus file storage ${filePath}:`, deleteErr);
+          }
+        }
       }
 
-      // Extract storage path from public URL
-      const parts = order.payment_proof_url.split(`/${bucketName}/`);
-      if (parts.length > 1) {
-        const filePath = parts[1]; // e.g. proofs/CK-...
-        
-        // Delete from storage
-        const { error: deleteErr } = await supabase.storage
-          .from(bucketName)
-          .remove([filePath]);
+      // Update database record to placeholder url (if not already placeholder) and set is_archived = true
+      const updateData = {
+        is_archived: true,
+        updated_at: new Date().toISOString()
+      };
 
-        if (deleteErr) {
-          console.error(`Gagal menghapus file storage ${filePath}:`, deleteErr);
-        }
+      if (!isPlaceholder) {
+        updateData.payment_proof_url = `https://via.placeholder.com/150/1a2f47/90CDF4?text=Bukti+Telah+Diarsip`;
+      }
 
-        // Update database record to placeholder url
-        const placeholderUrl = `https://via.placeholder.com/150/1a2f47/90CDF4?text=Bukti+Telah+Diarsip`;
-        const { error: updateErr } = await supabase
-          .from('orders')
-          .update({
-            payment_proof_url: placeholderUrl,
-            updated_at: new Date().toISOString()
-          })
-          .eq('order_id', order.order_id);
+      const { error: updateErr } = await supabase
+        .from('orders')
+        .update(updateData)
+        .eq('order_id', order.order_id);
 
-        if (updateErr) {
-          console.error(`Gagal memperbarui status db untuk ${order.order_id}:`, updateErr);
-        } else {
-          purgeCount++;
-        }
+      if (updateErr) {
+        console.error(`Gagal memperbarui status db untuk ${order.order_id}:`, updateErr);
+      } else {
+        purgeCount++;
       }
     }
 
     res.json({
       success: true,
       purgedCount: purgeCount,
-      message: `${purgeCount} berkas bukti pembayaran lama berhasil dibersihkan dari penyimpanan.`
+      message: `${purgeCount} pesanan berhasil dibersihkan dari penyimpanan bukti dan dipindahkan ke arsip.`
     });
 
   } catch (err) {
     console.error("Purge proofs error:", err);
-    res.status(500).json({ error: "Gagal membersihkan berkas bukti pembayaran." });
+    res.status(500).json({ error: "Gagal membersihkan berkas bukti pembayaran dan mengarsipkan pesanan." });
   }
 });
 

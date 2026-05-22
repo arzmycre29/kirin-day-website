@@ -55,6 +55,7 @@ export function AdminOrdersPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   
   // State variables for loaders and messages
   const [isLoading, setIsLoading] = useState(false);
@@ -88,7 +89,7 @@ export function AdminOrdersPage() {
     }
   }, [navigate]);
 
-  // 2. Fetch orders when token, page, statusFilter, or searchQuery changes
+  // 2. Fetch orders when token, page, statusFilter, searchQuery, or showArchived changes
   useEffect(() => {
     if (!token) return;
     
@@ -99,7 +100,8 @@ export function AdminOrdersPage() {
         const queryParams = new URLSearchParams({
           page: String(page),
           status: statusFilter,
-          search: searchQuery
+          search: searchQuery,
+          show_archived: String(showArchived)
         });
 
         const res = await fetch(`/api/orders?${queryParams.toString()}`, {
@@ -133,7 +135,7 @@ export function AdminOrdersPage() {
     };
 
     fetchOrders();
-  }, [token, page, statusFilter, searchQuery, navigate]);
+  }, [token, page, statusFilter, searchQuery, showArchived, navigate]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -359,7 +361,8 @@ export function AdminOrdersPage() {
       const queryParams = new URLSearchParams({
         page: String(page),
         status: statusFilter,
-        search: searchQuery
+        search: searchQuery,
+        show_archived: String(showArchived)
       });
       const res = await fetch(`/api/orders?${queryParams.toString()}`, {
         headers: {
@@ -608,7 +611,20 @@ export function AdminOrdersPage() {
               </div>
 
               {/* Stats & Manual Refresh */}
-              <div className="flex items-center gap-3 text-xs text-white/50">
+              <div className="flex items-center gap-4 text-xs text-white/50">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showArchived}
+                    onChange={(e) => {
+                      setShowArchived(e.target.checked);
+                      setPage(1);
+                    }}
+                    className="w-4 h-4 rounded border-white/20 bg-white/5 text-[#90CDF4] accent-[#90CDF4] cursor-pointer"
+                  />
+                  <span className="font-bold text-white/70 hover:text-white transition-colors">Tampilkan Arsip</span>
+                </label>
+                <span className="text-white/20">|</span>
                 <span className="font-bold">Total: {totalOrders} Pesanan</span>
                 <button
                   onClick={refreshOrders}
