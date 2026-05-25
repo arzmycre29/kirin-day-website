@@ -10,6 +10,22 @@ const TikTokIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+// Helper to parse Contentful Rich Text to string preserving paragraphs
+function parseRichText(richTextObj: any): string {
+  if (!richTextObj || !richTextObj.content) return 'No bio description available.';
+  return richTextObj.content
+    .map((block: any) => {
+      if (block.nodeType === 'paragraph' && block.content) {
+        return block.content
+          .map((node: any) => node.value || '')
+          .join('');
+      }
+      return '';
+    })
+    .filter((text: string) => text.trim() !== '')
+    .join('\n\n');
+}
+
 export function MemberDetailPage() {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
@@ -52,7 +68,7 @@ export function MemberDetailPage() {
             ? (fields.photo.fields.file.url.startsWith('//') ? 'https:' + fields.photo.fields.file.url : fields.photo.fields.file.url)
             : 'https://via.placeholder.com/600x800',
           color: fields.color || '#90CDF4',
-          description: fields.description?.content?.[0]?.content?.[0]?.value || 'No bio description available.',
+          description: parseRichText(fields.description),
           instagram: fields.instagram || '',
           twitter: fields.twitter || '',
           youtube: fields.youtube || '',
@@ -231,7 +247,7 @@ export function MemberDetailPage() {
 
             {/* Biography Description */}
             <div className="mb-10 text-base md:text-lg text-white/80 leading-relaxed max-w-2xl font-light" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              <p>{member.description}</p>
+              <p className="whitespace-pre-wrap">{member.description}</p>
             </div>
 
             {/* Social Media "Follow" section */}
