@@ -1,6 +1,6 @@
 // Cwd: d:/ProjectApp/Kirin Day Web/src/components/pages/buy/BuyPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   User, Mail, Phone, Instagram, MapPin, Gift, AlertTriangle, 
   ShoppingBag, Clipboard, Check, Upload, FileText, ChevronRight, X, Loader2,
@@ -10,6 +10,8 @@ import buyConfig from '../../../../config/buyConfig.js';
 
 export function BuyPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preselectedMember = searchParams.get('member');
   
   // Progress tracker state
   const [activeSection, setActiveSection] = useState('details');
@@ -192,8 +194,14 @@ export function BuyPage() {
           setChekiOrders(prev => {
             const next = { ...prev };
             formattedMembers.forEach(m => {
+              const isPreselected = preselectedMember && (
+                m.name.toLowerCase() === preselectedMember.toLowerCase() ||
+                m.id === preselectedMember
+              );
               if (!next[m.id]) {
-                next[m.id] = { type: 'Two Shot', quantity: 0 };
+                next[m.id] = { type: 'Two Shot', quantity: isPreselected ? 1 : 0 };
+              } else if (isPreselected) {
+                next[m.id].quantity = 1;
               }
             });
             if (!next['group_shot']) {
@@ -1177,7 +1185,14 @@ export function BuyPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {merch
-                  .filter(item => item.isActive)
+                  .filter(item => {
+                    if (!item.isActive) return false;
+                    const searchParam = searchParams.get('search');
+                    if (searchParam) {
+                      return item.name.toLowerCase().includes(searchParam.toLowerCase());
+                    }
+                    return true;
+                  })
                   .map(merch => {
                     const quantity = merchOrders[merch.id] || 0;
                     const hasSelected = quantity > 0;

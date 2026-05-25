@@ -5,6 +5,7 @@ import { Footer } from './components/Footer';
 import { HomePage } from './components/pages/HomePage';
 import { AboutPage } from './components/pages/AboutPage';
 import { MembersPage } from './components/pages/MembersPage';
+import { MemberDetailPage } from './components/pages/MemberDetailPage';
 import { MusicPage } from './components/pages/MusicPage';
 import { SchedulePage } from './components/pages/SchedulePage';
 import { MediaPage } from './components/pages/MediaPage';
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
             <Route path="/about" element={<PageTransition><AboutPage /></PageTransition>} />
             <Route path="/members" element={<PageTransition><MembersPage /></PageTransition>} />
+            <Route path="/members/:name" element={<PageTransition><MemberDetailPage /></PageTransition>} />
             <Route path="/music" element={<PageTransition><MusicPage /></PageTransition>} />
             <Route path="/schedule" element={<PageTransition><SchedulePage /></PageTransition>} />
             <Route path="/media" element={<PageTransition><MediaPage /></PageTransition>} />

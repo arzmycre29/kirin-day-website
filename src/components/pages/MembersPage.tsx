@@ -1,10 +1,10 @@
 import { Instagram, Twitter, Youtube, Award, Star } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageSkeleton } from '../PageSkeleton';
-import { MemberModal } from '../MemberModal';
 
 export function MembersPage() {
+  const navigate = useNavigate();
   // State for members and loading
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -73,30 +73,21 @@ export function MembersPage() {
     fetchMembers();
   }, []);
 
-  // Auto-open modal from URL param (e.g. /members?name=Akari)
+  // Auto-redirect from URL param to new personal page (e.g. /members?name=Akari -> /members/Akari)
   useEffect(() => {
     const targetName = searchParams.get('name');
-    if (targetName && members.length > 0 && !isModalOpen) {
+    if (targetName && members.length > 0) {
       const matched = members.find(
         (m) => m.name.toLowerCase() === targetName.toLowerCase()
       );
       if (matched) {
-        setSelectedMember(matched);
-        setIsModalOpen(true);
-        // Clear param so back button doesn't re-trigger
-        setSearchParams({}, { replace: true });
+        navigate(`/members/${encodeURIComponent(matched.name)}`, { replace: true });
       }
     }
   }, [members, searchParams]);
 
   const handleMemberClick = (member: any) => {
-    setSelectedMember(member);
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setTimeout(() => setSelectedMember(null), 300);
+    navigate(`/members/${encodeURIComponent(member.name)}`);
   };
 
   if (loading) {
@@ -252,14 +243,7 @@ export function MembersPage() {
         </div>
       </div>
 
-      {/* Member Modal */}
-      {isModalOpen && selectedMember && (
-        <MemberModal
-          member={selectedMember}
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-        />
-      )}
+      {/* Member Modal removed, now navigates to MemberDetailPage */}
     </div>
   );
 }
