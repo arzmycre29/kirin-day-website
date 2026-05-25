@@ -35,7 +35,7 @@ export default function App() {
 
   return (
     <AudioProvider>
-      <div className="min-h-screen bg-[#1a2f47] pb-20" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+      <div className="min-h-screen bg-[#1a2f47]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
         <ScrollToTop />
         <Navigation />
         <AnimatePresence mode="wait">
