@@ -1,49 +1,52 @@
 // Cwd: d:/ProjectApp/Kirin Day Web/api/orders/email.js
-const nodemailer = require('nodemailer');
-const dns = require('dns');
-
-// Force IPv4 resolution over IPv6 to prevent ENETUNREACH on environments without IPv6 routing (like Render)
-if (dns.setDefaultResultOrder) {
-  dns.setDefaultResultOrder('ipv4first');
-}
-
 require('dotenv').config();
 
-const smtpHost = process.env.SMTP_HOST;
-const smtpPort = process.env.SMTP_PORT || 587;
-const smtpUser = process.env.SMTP_USER;
-const smtpPass = process.env.SMTP_PASS;
+const brevoApiKey = process.env.BREVO_API_KEY;
+const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL;
 
-let transporter = null;
+const isBrevoConfigured = brevoApiKey && brevoApiKey.startsWith('xkeysib-') && !brevoApiKey.includes('your_brevo_api_key') && brevoSenderEmail;
 
-if (smtpHost && smtpUser && smtpPass) {
-  transporter = nodemailer.createTransport({
-    host: smtpHost,
-    port: parseInt(smtpPort, 10),
-    secure: parseInt(smtpPort, 10) === 465, // true for 465, false for other ports
-    auth: {
-      user: smtpUser,
-      pass: smtpPass
-    }
-  });
-  console.log("SMTP Mailer configured successfully.");
+if (isBrevoConfigured) {
+  console.log("Brevo Mailer configured successfully.");
 } else {
-  console.warn("SMTP credentials missing. Emails will be logged to console instead of sent.");
+  console.warn("BREVO_API_KEY or BREVO_SENDER_EMAIL missing or invalid. Emails will be logged to console (Mock Mailer).");
 }
 
 async function sendEmail({ to, subject, body }) {
-  if (transporter) {
+  if (isBrevoConfigured) {
     try {
-      const info = await transporter.sendMail({
-        from: `"Kirin Day Support" <${smtpUser}>`,
-        to,
-        subject,
-        html: body.replace(/\n/g, '<br>') // Convert newlines to HTML br tags for standard body formatting
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': brevoApiKey,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: {
+            name: "Kirin Day Support",
+            email: brevoSenderEmail
+          },
+          to: [
+            {
+              email: to
+            }
+          ],
+          subject: subject,
+          htmlContent: body.replace(/\n/g, '<br>') // Convert newlines to HTML br tags for standard body formatting
+        })
       });
-      console.log(`Email sent to ${to}: ${info.messageId}`);
-      return info;
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
+
+      console.log(`Email sent to ${to}: ${data.messageId}`);
+      return { messageId: data.messageId };
     } catch (err) {
-      console.error(`Failed to send email to ${to}:`, err);
+      console.error(`Failed to send email to ${to} via Brevo:`, err);
       return null;
     }
   } else {
