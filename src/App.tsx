@@ -14,6 +14,9 @@ import { OrderStatusPage } from './components/pages/buy/OrderStatusPage';
 import { AdminLoginPage } from './components/pages/buy/AdminLoginPage';
 import { AdminOrdersPage } from './components/pages/buy/AdminOrdersPage';
 import { AdminSettingsPage } from './components/pages/buy/AdminSettingsPage';
+import { AdminDashboardPage } from './components/pages/buy/AdminDashboardPage';
+import { AdminCheckInPage } from './components/pages/buy/AdminCheckInPage';
+import { AdminStockPage } from './components/pages/buy/AdminStockPage';
 import { ShopPageBackup } from './components/pages/ShopPageBackup';
 import { AudioProvider } from './context/AudioContext';
 import { FloatingMusicPlayer } from './components/FloatingMusicPlayer';
@@ -50,10 +53,12 @@ export default function App() {
             <Route path="/shop" element={<PageTransition><BuyPage /></PageTransition>} />
             <Route path="/buy" element={<PageTransition><BuyPage /></PageTransition>} />
             <Route path="/buy/status" element={<PageTransition><OrderStatusPage /></PageTransition>} />
-            <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
+            <Route path="/admin" element={<PageTransition><AdminDashboardPage /></PageTransition>} />
             <Route path="/admin/login" element={<PageTransition><AdminLoginPage /></PageTransition>} />
             <Route path="/admin/orders" element={<PageTransition><AdminOrdersPage /></PageTransition>} />
             <Route path="/admin/event-po-setting" element={<PageTransition><AdminSettingsPage /></PageTransition>} />
+            <Route path="/admin/check-in" element={<PageTransition><AdminCheckInPage /></PageTransition>} />
+            <Route path="/admin/stock-setting" element={<PageTransition><AdminStockPage /></PageTransition>} />
             <Route path="/shop-legacy" element={<PageTransition><ShopPageBackup /></PageTransition>} />
             <Route path="*" element={<PageTransition><HomePage /></PageTransition>} />
           </Routes>

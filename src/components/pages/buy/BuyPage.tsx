@@ -44,6 +44,29 @@ export function BuyPage() {
     event_visibility: {}
   });
 
+  // Event Cheki Quota Status state
+  const [eventChekiStatus, setEventChekiStatus] = useState<any>(null);
+
+  // Fetch event cheki quota status when event changes
+  useEffect(() => {
+    if (!selectedEvent) {
+      setEventChekiStatus(null);
+      return;
+    }
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`/api/orders/event-cheki-status?event_name=${encodeURIComponent(selectedEvent)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setEventChekiStatus(data);
+        }
+      } catch (e) {
+        console.error("Error fetching event cheki status:", e);
+      }
+    };
+    fetchStatus();
+  }, [selectedEvent]);
+
   // Fetch members, merchandise, settings, and events
   useEffect(() => {
     const fetchContentfulData = async () => {
@@ -424,7 +447,7 @@ export function BuyPage() {
   };
 
   const handleChekiQtyChange = (memberId: string, qty: number) => {
-    const clamped = Math.max(0, Math.min(buyConfig.maxChekiPerMemberPerType, qty));
+    const clamped = Math.max(0, Math.min(50, qty));
     setChekiOrders(prev => {
       const defaultType = memberId === 'group_shot' ? 'Group' : 'Two Shot';
       const current = prev[memberId] || { type: defaultType, quantity: 0 };
@@ -529,6 +552,43 @@ export function BuyPage() {
   const grandTotal = chekiGrandTotal + merchGrandTotal;
   const isCartEmpty = activeChekiList.length === 0 && activeMerchList.length === 0;
   const isChekiLimitExceeded = totalChekiQty > 50;
+
+  // New variables for independent PO statuses and stock overrides
+  const isChekiAvailable = shopSettings.cheki_po_open !== false;
+  const getMerchStock = (item: any) => {
+    return shopSettings.merch_stock_overrides?.[item.id] !== undefined
+      ? parseInt(shopSettings.merch_stock_overrides[item.id], 10)
+      : item.stock;
+  };
+  const isMerchAvailable = shopSettings.merch_po_open !== false && merch.some(item => item.isActive && getMerchStock(item) > 0);
+  const isShopFullyClosed = !isChekiAvailable && !isMerchAvailable;
+  const isEventChekiQuotaExceeded = eventChekiStatus && eventChekiStatus.quota !== null && eventChekiStatus.remaining !== null && eventChekiStatus.remaining <= 0;
+
+  // Reset cheki quantities if cheki po is closed or quota exceeded
+  useEffect(() => {
+    if (!isChekiAvailable || isEventChekiQuotaExceeded) {
+      setChekiOrders(prev => {
+        const next = { ...prev };
+        Object.keys(next).forEach(k => {
+          next[k].quantity = 0;
+        });
+        return next;
+      });
+    }
+  }, [isChekiAvailable, isEventChekiQuotaExceeded]);
+
+  // Reset merch quantities if merch sales are closed
+  useEffect(() => {
+    if (!isMerchAvailable) {
+      setMerchOrders(prev => {
+        const next = { ...prev };
+        Object.keys(next).forEach(k => {
+          next[k] = 0;
+        });
+        return next;
+      });
+    }
+  }, [isMerchAvailable]);
 
   // File Upload Handlers
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -640,6 +700,21 @@ export function BuyPage() {
     if (isChekiLimitExceeded) {
       setSubmitError('Jumlah total Cheki Anda melebihi batas 50 lembar.');
       itemsRef.current?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+
+    if (totalChekiQty > 0 && !isChekiAvailable) {
+      setSubmitError('Pemesanan Cheki saat ini sedang ditutup.');
+      return;
+    }
+
+    if (totalChekiQty > 0 && isEventChekiQuotaExceeded) {
+      setSubmitError('Kuota pemesanan Cheki untuk event ini sudah penuh.');
+      return;
+    }
+
+    if (activeMerchList.length > 0 && !isMerchAvailable) {
+      setSubmitError('Penjualan Merchandise saat ini sedang ditutup atau stok habis.');
       return;
     }
 
@@ -772,7 +847,7 @@ export function BuyPage() {
           </div>
         </div>
 
-        {!shopSettings.master_status.is_open ? (
+        {isShopFullyClosed ? (
           <div className="max-w-xl mx-auto mt-12 p-8 md:p-12 rounded-3xl border border-white/10 bg-[#152238]/60 backdrop-blur-md text-center shadow-2xl relative overflow-hidden">
             {/* Ambient background glow */}
             <div className="absolute -top-24 -left-24 w-48 h-48 bg-[#F6E05E]/10 rounded-full blur-3xl pointer-events-none" />
@@ -961,9 +1036,27 @@ export function BuyPage() {
                   <ShoppingBag className="w-6 h-6" /> 2. PESANAN CHEKI
                 </h2>
                 <span className="text-xs font-bold px-3 py-1.5 rounded-md bg-[#90CDF4]/15 border border-[#90CDF4]/30 text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                  Maks. 10 per jenis per member
+                  Batas Maks. 50 Lembar
                 </span>
               </div>
+
+              {!isChekiAvailable && (
+                <div className="p-4 rounded-xl border-2 border-amber-500/50 bg-amber-950/40 text-amber-200 flex items-center gap-3 mb-6">
+                  <AlertTriangle className="w-6 h-6 text-amber-400 flex-shrink-0 animate-pulse" />
+                  <p className="text-sm font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    Pre-order Cheki saat ini sedang ditutup. Anda tidak dapat menambahkan pesanan Cheki.
+                  </p>
+                </div>
+              )}
+
+              {isChekiAvailable && isEventChekiQuotaExceeded && (
+                <div className="p-4 rounded-xl border-2 border-red-500/50 bg-red-950/40 text-red-200 flex items-center gap-3 mb-6">
+                  <AlertTriangle className="w-6 h-6 text-red-400 flex-shrink-0 animate-pulse" />
+                  <p className="text-sm font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    Kuota pre-order Cheki untuk event "{selectedEvent}" sudah terpenuhi. Anda tidak dapat memesan Cheki.
+                  </p>
+                </div>
+              )}
 
               {isChekiLimitExceeded && (
                 <div className="p-4 rounded-xl border-2 border-red-500/50 bg-red-950/40 text-red-200 flex items-center gap-3 mb-6">
@@ -1046,8 +1139,8 @@ export function BuyPage() {
                             <button
                               type="button"
                               onClick={() => handleChekiQtyChange(member.id, order.quantity - 1)}
-                              disabled={order.quantity <= 0}
-                              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                              disabled={order.quantity <= 0 || !isChekiAvailable || isEventChekiQuotaExceeded}
+                              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold"
                             >
                               <span className="text-lg font-bold">-</span>
                             </button>
@@ -1056,8 +1149,9 @@ export function BuyPage() {
                               type="text"
                               value={order.quantity === 0 ? '' : order.quantity}
                               onChange={e => handleChekiDirectInput(member.id, e.target.value)}
+                              disabled={!isChekiAvailable || isEventChekiQuotaExceeded}
                               placeholder="0"
-                              className="w-10 text-center font-black bg-black/30 border border-white/10 rounded-lg py-1 text-sm outline-none focus:border-[#90CDF4]"
+                              className="w-10 text-center font-black bg-black/30 border border-white/10 rounded-lg py-1 text-sm outline-none focus:border-[#90CDF4] disabled:opacity-30"
                               style={{ fontFamily: 'Montserrat, sans-serif' }}
                             />
 
@@ -1065,8 +1159,8 @@ export function BuyPage() {
                             <button
                               type="button"
                               onClick={() => handleChekiQtyChange(member.id, order.quantity + 1)}
-                              disabled={order.quantity >= buyConfig.maxChekiPerMemberPerType}
-                              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                              disabled={order.quantity >= 50 || !isChekiAvailable || isEventChekiQuotaExceeded}
+                              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold"
                             >
                               <span className="text-lg font-bold">+</span>
                             </button>
@@ -1137,8 +1231,8 @@ export function BuyPage() {
                           <button
                             type="button"
                             onClick={() => handleChekiQtyChange('group_shot', order.quantity - 1)}
-                            disabled={order.quantity <= 0}
-                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                            disabled={order.quantity <= 0 || !isChekiAvailable || isEventChekiQuotaExceeded}
+                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold"
                           >
                             <span className="text-lg font-bold">-</span>
                           </button>
@@ -1147,8 +1241,9 @@ export function BuyPage() {
                             type="text"
                             value={order.quantity === 0 ? '' : order.quantity}
                             onChange={e => handleChekiDirectInput('group_shot', e.target.value)}
+                            disabled={!isChekiAvailable || isEventChekiQuotaExceeded}
                             placeholder="0"
-                            className="w-10 text-center font-black bg-black/30 border border-white/10 rounded-lg py-1 text-sm outline-none focus:border-[#90CDF4]"
+                            className="w-10 text-center font-black bg-black/30 border border-white/10 rounded-lg py-1 text-sm outline-none focus:border-[#90CDF4] disabled:opacity-30"
                             style={{ fontFamily: 'Montserrat, sans-serif' }}
                           />
 
@@ -1156,8 +1251,8 @@ export function BuyPage() {
                           <button
                             type="button"
                             onClick={() => handleChekiQtyChange('group_shot', order.quantity + 1)}
-                            disabled={order.quantity >= buyConfig.maxChekiPerMemberPerType}
-                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                            disabled={order.quantity >= 50 || !isChekiAvailable || isEventChekiQuotaExceeded}
+                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold"
                           >
                             <span className="text-lg font-bold">+</span>
                           </button>
@@ -1183,6 +1278,15 @@ export function BuyPage() {
                 <ShoppingBag className="w-6 h-6" /> 3. PESANAN MERCHANDISE
               </h2>
 
+              {!isMerchAvailable && (
+                <div className="p-4 rounded-xl border-2 border-amber-500/50 bg-amber-950/40 text-amber-200 flex items-center gap-3 mb-6">
+                  <AlertTriangle className="w-6 h-6 text-amber-400 flex-shrink-0 animate-pulse" />
+                  <p className="text-sm font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    Penjualan Merchandise saat ini sedang ditutup atau stok habis.
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {merch
                   .filter(item => {
@@ -1194,10 +1298,13 @@ export function BuyPage() {
                     return true;
                   })
                   .map(merch => {
+                    const stock = shopSettings.merch_stock_overrides?.[merch.id] !== undefined
+                      ? parseInt(shopSettings.merch_stock_overrides[merch.id], 10)
+                      : merch.stock;
                     const quantity = merchOrders[merch.id] || 0;
                     const hasSelected = quantity > 0;
                     const subtotal = quantity * merch.price;
-                    const isOutOfStock = merch.stock <= 0;
+                    const isOutOfStock = stock <= 0;
 
                     return (
                       <div
@@ -1231,7 +1338,7 @@ export function BuyPage() {
                                 </span>
                               ) : (
                                 <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded">
-                                  Tersedia: {merch.stock}
+                                  Tersedia: {stock}
                                 </span>
                               )}
                             </div>
@@ -1252,8 +1359,8 @@ export function BuyPage() {
                           <div className="flex items-center gap-3">
                             <button
                               type="button"
-                              onClick={() => handleMerchQtyChange(merch.id, quantity - 1, merch.stock)}
-                              disabled={quantity <= 0 || isOutOfStock}
+                              onClick={() => handleMerchQtyChange(merch.id, quantity - 1, stock)}
+                              disabled={quantity <= 0 || isOutOfStock || !isMerchAvailable}
                               className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                             >
                               <span className="text-lg font-bold">-</span>
@@ -1262,8 +1369,8 @@ export function BuyPage() {
                             <input
                               type="text"
                               value={quantity === 0 ? '' : quantity}
-                              onChange={e => handleMerchDirectInput(merch.id, e.target.value, merch.stock)}
-                              disabled={isOutOfStock}
+                              onChange={e => handleMerchDirectInput(merch.id, e.target.value, stock)}
+                              disabled={isOutOfStock || !isMerchAvailable}
                               placeholder="0"
                               className="w-10 text-center font-black bg-black/30 border border-white/10 rounded-lg py-1 text-sm outline-none focus:border-[#90CDF4] disabled:opacity-30"
                               style={{ fontFamily: 'Montserrat, sans-serif' }}
@@ -1271,8 +1378,8 @@ export function BuyPage() {
 
                             <button
                               type="button"
-                              onClick={() => handleMerchQtyChange(merch.id, quantity + 1, merch.stock)}
-                              disabled={quantity >= Math.min(buyConfig.maxMerchPerItem, merch.stock) || isOutOfStock}
+                              onClick={() => handleMerchQtyChange(merch.id, quantity + 1, stock)}
+                              disabled={quantity >= Math.min(buyConfig.maxMerchPerItem, stock) || isOutOfStock || !isMerchAvailable}
                               className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                             >
                               <span className="text-lg font-bold">+</span>
@@ -1356,6 +1463,21 @@ export function BuyPage() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {eventChekiStatus && eventChekiStatus.quota !== null && (
+                <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/10 text-xs flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${isEventChekiQuotaExceeded ? 'bg-red-400 animate-pulse' : 'bg-emerald-400'}`} />
+                    <span className="text-white/60 font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>Kuota Pemesanan Cheki Event:</span>
+                  </div>
+                  <span className={`font-black ${isEventChekiQuotaExceeded ? 'text-red-400 bg-red-950/20 px-2 py-0.5 border border-red-500/30 rounded font-bold' : 'text-[#F6E05E]'}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    {isEventChekiQuotaExceeded 
+                      ? 'KUOTA PENUH' 
+                      : `${eventChekiStatus.ordered} / ${eventChekiStatus.quota} lembar terisi (Sisa ${eventChekiStatus.remaining} lembar)`
+                    }
+                  </span>
                 </div>
               )}
             </div>

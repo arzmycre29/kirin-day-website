@@ -79,14 +79,18 @@ export function AdminOrdersPage() {
   const [checkinOrders, setCheckinOrders] = useState<Order[]>([]);
   const [loadingCheckin, setLoadingCheckin] = useState(false);
 
-  // 1. Verify admin session on mount
+  // 1. Verify admin session on mount with 24h revocation
   useEffect(() => {
     const savedPass = localStorage.getItem('admin_password');
-    if (!savedPass) {
+    const savedTime = localStorage.getItem('admin_login_timestamp');
+
+    if (!savedPass || !savedTime || (Date.now() - parseInt(savedTime, 10) > 24 * 60 * 60 * 1000)) {
+      localStorage.removeItem('admin_password');
+      localStorage.removeItem('admin_login_timestamp');
       navigate('/admin/login');
-    } else {
-      setToken(savedPass);
+      return;
     }
+    setToken(savedPass);
   }, [navigate]);
 
   // 2. Fetch orders when token, page, statusFilter, searchQuery, or showArchived changes
@@ -148,12 +152,13 @@ export function AdminOrdersPage() {
     setPage(1);
   };
 
-  const handleDownloadBackup = async () => {
+  const handleDownloadBackup = async (includeArchived = false) => {
     if (!token) return;
     setIsBackupLoading(true);
     setActionMessage(null);
     try {
-      const res = await fetch('/api/orders/backup-zip', {
+      const queryParams = includeArchived ? '?include_archived=true' : '';
+      const res = await fetch(`/api/orders/backup-zip${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -161,6 +166,7 @@ export function AdminOrdersPage() {
       
       if (res.status === 401) {
         localStorage.removeItem('admin_password');
+        localStorage.removeItem('admin_login_timestamp');
         navigate('/admin/login');
         return;
       }
@@ -175,13 +181,13 @@ export function AdminOrdersPage() {
       const a = document.createElement('a');
       a.href = url;
       const dateStr = new Date().toISOString().slice(0, 10);
-      a.download = `KirinDay_Backup_Shop_${dateStr}.zip`;
+      a.download = includeArchived ? `KirinDay_BulkBackup_Shop_${dateStr}.zip` : `KirinDay_Backup_Shop_${dateStr}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
       
-      setActionMessage({ type: 'success', text: 'Backup data pesanan (.zip) berhasil diunduh.' });
+      setActionMessage({ type: 'success', text: includeArchived ? 'Bulk backup data pesanan (.zip) berhasil diunduh.' : 'Backup data pesanan (.zip) berhasil diunduh.' });
     } catch (err: any) {
       console.error(err);
       setActionMessage({ type: 'error', text: err.message || 'Gagal mengunduh backup (.zip).' });
@@ -252,6 +258,7 @@ export function AdminOrdersPage() {
 
   const handleLogout = () => {
     localStorage.removeItem('admin_password');
+    localStorage.removeItem('admin_login_timestamp');
     navigate('/admin/login');
   };
 
@@ -470,6 +477,17 @@ export function AdminOrdersPage() {
 
   return (
     <div className="min-h-screen pt-32 pb-32 px-4 md:px-8 bg-[#1a2f47] text-white">
+      {/* Back to Dashboard Link */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <button
+          onClick={() => navigate('/admin')}
+          className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#90CDF4] hover:text-white transition-colors cursor-pointer"
+          style={{ fontFamily: 'Montserrat, sans-serif' }}
+        >
+          <ChevronLeft className="w-4 h-4" /> DASBOR UTAMA ADMIN
+        </button>
+      </div>
+
       {/* Top Banner Header */}
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 pb-6 border-b border-white/10">
         <div>
@@ -488,8 +506,8 @@ export function AdminOrdersPage() {
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={() => setIsCheckinMode(true)}
-            className="px-3.5 py-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-500 text-emerald-400 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+            onClick={() => navigate('/admin/check-in')}
+            className="px-3.5 py-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-500 text-emerald-400 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             style={{ fontFamily: 'Montserrat, sans-serif' }}
             title="Masuk ke mode check-in pencarian cepat untuk pengambilan cheki/merchandise di booth event"
           >
@@ -499,7 +517,7 @@ export function AdminOrdersPage() {
 
           <button
             onClick={() => navigate('/admin/event-po-setting')}
-            className="px-3.5 py-2 rounded-xl border border-[#90CDF4]/20 bg-[#90CDF4]/5 hover:bg-[#90CDF4]/15 hover:border-[#90CDF4] text-[#90CDF4] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl border border-[#90CDF4]/20 bg-[#90CDF4]/5 hover:bg-[#90CDF4]/15 hover:border-[#90CDF4] text-[#90CDF4] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             style={{ fontFamily: 'Montserrat, sans-serif' }}
             title="Kelola visibilitas event dan toggle buka/tutup toko pre-order"
           >
@@ -508,20 +526,31 @@ export function AdminOrdersPage() {
           </button>
 
           <button
-            onClick={handleDownloadBackup}
+            onClick={() => handleDownloadBackup(false)}
             disabled={isBackupLoading}
-            className="px-3.5 py-2 rounded-xl border border-[#90CDF4]/20 bg-[#90CDF4]/5 hover:bg-[#90CDF4]/15 hover:border-[#90CDF4] text-[#90CDF4] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+            className="px-3.5 py-2 rounded-xl border border-[#90CDF4]/20 bg-[#90CDF4]/5 hover:bg-[#90CDF4]/15 hover:border-[#90CDF4] text-[#90CDF4] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
             style={{ fontFamily: 'Montserrat, sans-serif' }}
-            title="Unduh rekap CSV dan semua bukti pembayaran ke dalam file ZIP"
+            title="Unduh rekap CSV dan bukti bayar pesanan aktif ke dalam file ZIP"
           >
             {isBackupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} 
-            Backup (.ZIP)
+            Backup Aktif
+          </button>
+
+          <button
+            onClick={() => handleDownloadBackup(true)}
+            disabled={isBackupLoading}
+            className="px-3.5 py-2 rounded-xl border border-[#90CDF4]/20 bg-[#90CDF4]/5 hover:bg-[#90CDF4]/15 hover:border-[#90CDF4] text-[#90CDF4] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            style={{ fontFamily: 'Montserrat, sans-serif' }}
+            title="Unduh rekap CSV dan bukti bayar seluruh pesanan (termasuk arsip) ke dalam file ZIP"
+          >
+            {isBackupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} 
+            Bulk Backup
           </button>
 
           <button
             onClick={handlePurgeProofs}
             disabled={isPurgeLoading}
-            className="px-3.5 py-2 rounded-xl border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/15 hover:border-amber-500 text-amber-400 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+            className="px-3.5 py-2 rounded-xl border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/15 hover:border-amber-500 text-amber-400 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
             style={{ fontFamily: 'Montserrat, sans-serif' }}
             title="Hapus gambar bukti pembayaran dari pesanan yang sudah disetujui/ditolak untuk menghemat penyimpanan"
           >
@@ -531,7 +560,7 @@ export function AdminOrdersPage() {
 
           <button
             onClick={handleLogout}
-            className="px-3.5 py-2 rounded-xl border border-white/10 hover:border-red-400 hover:bg-red-950/20 text-white/70 hover:text-red-300 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl border border-white/10 hover:border-red-400 hover:bg-red-950/20 text-white/70 hover:text-red-300 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             style={{ fontFamily: 'Montserrat, sans-serif' }}
           >
             <LogOut className="w-3.5 h-3.5" /> Keluar Panel
@@ -1095,203 +1124,7 @@ export function AdminOrdersPage() {
         </div>
       )}
 
-      {/* CHECK-IN OVERLAY DASHBOARD */}
-      {isCheckinMode && (
-        <div className="fixed inset-0 z-50 bg-[#1a2f47]/95 backdrop-blur-md flex flex-col p-4 md:p-8 text-white overflow-hidden animate-fadeIn">
-          <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col h-full">
-            
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[10px] font-black tracking-[0.2em] px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded uppercase">
-                    Booth Mode
-                  </span>
-                </div>
-                <h2 className="text-xl md:text-2xl font-black text-[#90CDF4] tracking-tight flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                  <CheckSquare className="w-6 h-6" /> Mode Check-in Pengambilan
-                </h2>
-              </div>
-              <button
-                onClick={() => {
-                  setIsCheckinMode(false);
-                  refreshOrders(); // Refresh background list to sync is_redeemed updates
-                }}
-                className="p-2.5 rounded-xl border border-white/10 hover:border-red-400 hover:bg-red-950/20 text-white/70 hover:text-red-300 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
-                style={{ fontFamily: 'Montserrat, sans-serif' }}
-              >
-                <X className="w-4 h-4" /> Tutup Mode Check-in
-              </button>
-            </div>
 
-            {/* Toolbar */}
-            <div className="flex flex-col md:flex-row gap-4 mb-6 items-stretch">
-              <form 
-                onSubmit={(e) => { 
-                  e.preventDefault(); 
-                  fetchCheckinOrders(checkinSearch); 
-                }} 
-                className="flex flex-1 gap-2.5"
-              >
-                <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                  <input
-                    type="text"
-                    value={checkinSearch}
-                    onChange={e => setCheckinSearch(e.target.value)}
-                    placeholder="Cari ID Pesanan, Nama, atau Email (Status Diterima)..."
-                    className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white outline-none focus:border-[#90CDF4] text-sm transition-all"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-[#90CDF4] text-[#1a2f47] font-black text-xs md:text-sm tracking-wide hover:bg-[#a0d8f7] transition-all flex items-center gap-1.5"
-                  style={{ fontFamily: 'Montserrat, sans-serif' }}
-                >
-                  <Search className="w-4 h-4" /> Cari
-                </button>
-              </form>
-
-              <div className="flex items-center gap-3">
-                <select
-                  value={checkinEventFilter}
-                  onChange={e => setCheckinEventFilter(e.target.value)}
-                  className="px-4 py-2.5 rounded-xl border border-white/10 bg-[#152238] text-white outline-none focus:border-[#90CDF4] text-xs font-bold transition-all h-full"
-                  style={{ fontFamily: 'Montserrat, sans-serif' }}
-                >
-                  <option value="all">SEMUA EVENT</option>
-                  {Array.from(new Set(checkinOrders.map(o => o.event_name).filter(Boolean))).map(evt => (
-                    <option key={evt} value={evt || ''}>{(evt || '').toUpperCase()}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => fetchCheckinOrders(checkinSearch)}
-                  className="p-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 hover:text-white transition-all h-full flex items-center justify-center"
-                  title="Refresh data check-in"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Table Area */}
-            <div className="flex-1 border border-white/10 rounded-2xl bg-[#152238]/30 overflow-hidden shadow-xl flex flex-col min-h-0">
-              <div className="overflow-auto flex-1 font-sans">
-                {loadingCheckin ? (
-                  <div className="h-full flex flex-col items-center justify-center gap-3 py-24">
-                    <Loader2 className="w-10 h-10 text-[#90CDF4] animate-spin" />
-                    <p className="text-white/50 text-xs font-bold animate-pulse" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                      Memuat data pengambilan...
-                    </p>
-                  </div>
-                ) : checkinOrders.filter(o => checkinEventFilter === 'all' || o.event_name === checkinEventFilter).length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center py-24 text-center">
-                    <ShoppingBag className="w-12 h-12 text-white/10 mx-auto mb-3" />
-                    <p className="text-white/40 text-sm font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                      Tidak ada data pesanan Diterima yang cocok.
-                    </p>
-                  </div>
-                ) : (
-                  <table className="w-full text-left border-collapse text-sm">
-                    <thead className="sticky top-0 z-10 bg-[#152238] border-b border-white/10">
-                      <tr className="text-white/50 font-black text-xs tracking-wider uppercase" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                        <th className="py-4 px-5">ID / Pembeli</th>
-                        <th className="py-4 px-4">Detail Pengambilan</th>
-                        <th className="py-4 px-4">Item Pesanan</th>
-                        <th className="py-4 px-4 text-center">Bukti Bayar</th>
-                        <th className="py-4 px-5 text-center">Sudah Diambil?</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {checkinOrders
-                        .filter(o => checkinEventFilter === 'all' || o.event_name === checkinEventFilter)
-                        .map((item) => {
-                          return (
-                            <tr 
-                              key={item.order_id} 
-                              className="hover:bg-white/5 transition-colors"
-                            >
-                              <td className="py-4 px-5">
-                                <p className="font-black text-white/90 text-sm" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                                  {item.order_id}
-                                </p>
-                                <p className="font-bold text-white text-xs leading-tight mt-0.5">{item.buyer_name}</p>
-                                <div className="flex gap-2 mt-1 text-[11px]">
-                                  <a 
-                                    href={`https://wa.me/${item.buyer_whatsapp.replace('+', '')}`} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    className="text-[#90CDF4] hover:underline"
-                                  >
-                                    WA: {item.buyer_whatsapp}
-                                  </a>
-                                  <span className="text-white/20">|</span>
-                                  <a 
-                                    href={`https://instagram.com/${item.buyer_instagram}`} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    className="text-[#90CDF4] hover:underline"
-                                  >
-                                    IG: @{item.buyer_instagram}
-                                  </a>
-                                </div>
-                              </td>
-                              <td className="py-4 px-4 text-xs font-bold text-white/70">
-                                <span className="uppercase text-[10px] tracking-wider text-white/40 block">Metode: {item.redeem_method}</span>
-                                {item.redeem_method === 'event' ? (
-                                  <span className="text-[#F6E05E]">{item.event_name || 'Event Kirin Day'}</span>
-                                ) : (
-                                  <span className="text-white/50 block truncate max-w-[200px]" title={item.shipping_address || ''}>
-                                    {item.shipping_address}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-4 px-4">
-                                <div className="flex flex-wrap gap-1.5 max-w-xs">
-                                  {item.cheki_items?.map((cheki, idx) => (
-                                    <span key={`ck-${idx}`} className="inline-block px-2 py-0.5 rounded-md bg-[#F6E05E]/10 border border-[#F6E05E]/30 text-[#F6E05E] text-[10px] font-bold">
-                                      Cheki {cheki.member_name} ({cheki.type}) x{cheki.quantity}
-                                    </span>
-                                  ))}
-                                  {item.merch_items?.map((merch, idx) => (
-                                    <span key={`mr-${idx}`} className="inline-block px-2 py-0.5 rounded-md bg-[#90CDF4]/10 border border-[#90CDF4]/30 text-[#90CDF4] text-[10px] font-bold">
-                                      {merch.merch_name} x{merch.quantity}
-                                    </span>
-                                  ))}
-                                </div>
-                              </td>
-                              <td className="py-4 px-4 text-center">
-                                <a
-                                  href={item.payment_proof_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#90CDF4]/10 hover:bg-[#90CDF4]/20 border border-[#90CDF4]/20 text-[#90CDF4] text-[10px] font-black uppercase tracking-wider transition-all"
-                                >
-                                  Buka <ExternalLink className="w-2.5 h-2.5" />
-                                </a>
-                              </td>
-                              <td className="py-4 px-5 text-center">
-                                <label className="inline-flex items-center justify-center cursor-pointer p-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={!!item.is_redeemed}
-                                    onChange={() => handleToggleRedeem(item.order_id, !!item.is_redeemed)}
-                                    className="w-6 h-6 rounded border-white/20 bg-white/5 text-[#90CDF4] focus:ring-0 focus:ring-offset-0 focus:outline-none cursor-pointer accent-[#90CDF4]"
-                                  />
-                                </label>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
 
     </div>
   );

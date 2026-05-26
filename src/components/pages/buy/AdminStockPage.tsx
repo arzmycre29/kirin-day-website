@@ -1,27 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Save, Loader2, ToggleLeft, ToggleRight, 
-  Eye, EyeOff, Calendar, MapPin, AlertTriangle, ShieldCheck 
+  ArrowLeft, Save, Loader2, Layers, ShieldCheck, AlertTriangle 
 } from 'lucide-react';
 import buyConfig from '../../../../config/buyConfig.js';
 
-export function AdminSettingsPage() {
+export function AdminStockPage() {
   const navigate = useNavigate();
-  const [password, setPassword] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadingData, setLoadingData] = useState(true);
-  
-  // Settings states
-  const [chekiPoOpen, setChekiPoOpen] = useState(true);
-  const [merchPoOpen, setMerchPoOpen] = useState(true);
-  const [eventVisibility, setEventVisibility] = useState<Record<string, boolean>>({});
-  const [events, setEvents] = useState<any[]>([]);
-  
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  // Auth session verify on mount with 24h revocation
+  // Content data
+  const [events, setEvents] = useState<any[]>([]);
+  const [merch, setMerch] = useState<any[]>([]);
+
+  // Settings states
+  const [eventQuotas, setEventQuotas] = useState<Record<string, number | string>>({});
+  const [stockOverrides, setStockOverrides] = useState<Record<string, number | string>>({});
+
+  // Verify admin session on mount (24h revocation)
   useEffect(() => {
     const checkAuth = async () => {
       const savedPass = localStorage.getItem('admin_password');
@@ -33,6 +33,7 @@ export function AdminSettingsPage() {
         navigate('/admin/login');
         return;
       }
+
       try {
         const res = await fetch('/api/orders?page=1', {
           headers: {
@@ -44,42 +45,43 @@ export function AdminSettingsPage() {
           localStorage.removeItem('admin_login_timestamp');
           navigate('/admin/login');
         } else {
-          setPassword(savedPass);
+          setToken(savedPass);
           setIsLoading(false);
         }
       } catch (err) {
-        setPassword(savedPass);
+        setToken(savedPass);
         setIsLoading(false);
       }
     };
     checkAuth();
   }, [navigate]);
 
-  // Fetch settings & Contentful events
+  // Fetch settings & Contentful data
   useEffect(() => {
-    if (isLoading || !password) return;
+    if (isLoading || !token) return;
 
     const fetchData = async () => {
       setLoadingData(true);
       try {
         // 1. Fetch settings
         const settingsRes = await fetch('/api/settings');
-        let settings = { event_visibility: {} as Record<string, boolean>, cheki_po_open: true, merch_po_open: true };
+        let settings = { event_cheki_quotas: {}, merch_stock_overrides: {} };
         if (settingsRes.ok) {
           settings = await settingsRes.json();
         }
-        setChekiPoOpen(settings.cheki_po_open !== false);
-        setMerchPoOpen(settings.merch_po_open !== false);
-        setEventVisibility(settings.event_visibility || {});
+        setEventQuotas(settings.event_cheki_quotas || {});
+        setStockOverrides(settings.merch_stock_overrides || {});
 
-        // 2. Fetch events from Contentful
+        // 2. Fetch Contentful data (Events & Products)
         try {
           const { client } = await import('../../../lib/contentful');
-          const response = await client.getEntries({
+          
+          // Events
+          const eventsResponse = await client.getEntries({
             content_type: 'event',
             order: ['fields.date'],
           });
-          const formattedEvents = response.items.map((item: any) => {
+          const formattedEvents = eventsResponse.items.map((item: any) => {
             const rawDate = item.fields.date;
             let dateStr = 'TBA';
             if (rawDate) {
@@ -91,7 +93,6 @@ export function AdminSettingsPage() {
               title: item.fields.title || 'Untitled Event',
               date: dateStr,
               venue: item.fields.venue || 'TBA',
-              location: item.fields.address || '',
               rawDate
             };
           });
@@ -102,10 +103,30 @@ export function AdminSettingsPage() {
             date: buyConfig.eventInfo.date,
             venue: buyConfig.eventInfo.location
           };
-          
           setEvents([defaultEv, ...formattedEvents]);
+
+          // Products
+          const productsResponse = await client.getEntries({
+            content_type: 'product',
+            order: ['fields.name'],
+          });
+          const formattedMerch = productsResponse.items
+            .filter((item: any) => item.fields.category !== 'Cheki')
+            .map((item: any) => ({
+              id: item.sys.id,
+              name: item.fields.name || 'Untitled Product',
+              price: item.fields.price || 0,
+              stock: item.fields.inStock !== false ? 50 : 0
+            }));
+          
+          if (formattedMerch.length > 0) {
+            setMerch(formattedMerch);
+          } else {
+            setMerch(buyConfig.merch);
+          }
+
         } catch (contentfulErr) {
-          console.error("Contentful loading error on admin settings:", contentfulErr);
+          console.error("Contentful loading error on admin stock:", contentfulErr);
           const defaultEv = {
             id: 'default',
             title: buyConfig.eventInfo.name,
@@ -113,41 +134,41 @@ export function AdminSettingsPage() {
             venue: buyConfig.eventInfo.location
           };
           setEvents([defaultEv]);
+          setMerch(buyConfig.merch);
         }
       } catch (err) {
-        console.error("Error loading settings page data:", err);
+        console.error("Error loading stock overrides page:", err);
       } finally {
         setLoadingData(false);
       }
     };
 
     fetchData();
-  }, [isLoading, password]);
+  }, [isLoading, token]);
 
   const handleSave = async () => {
-    if (!password) return;
+    if (!token) return;
     setIsSaving(true);
     setMessage(null);
     try {
       const res = await fetch('/api/settings', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${password}`
-          },
-          body: JSON.stringify({
-            cheki_po_open: chekiPoOpen,
-            merch_po_open: merchPoOpen,
-            event_visibility: eventVisibility
-          })
-        });
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          event_cheki_quotas: eventQuotas,
+          merch_stock_overrides: stockOverrides
+        })
+      });
 
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Gagal menyimpan pengaturan.');
       }
 
-      setMessage({ text: 'Pengaturan berhasil disimpan!', type: 'success' });
+      setMessage({ text: 'Pengaturan kuota dan stok berhasil disimpan!', type: 'success' });
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
       console.error("Save settings error:", err);
@@ -157,10 +178,17 @@ export function AdminSettingsPage() {
     }
   };
 
-  const toggleEventVisibility = (eventId: string) => {
-    setEventVisibility(prev => ({
+  const handleQuotaChange = (eventTitle: string, value: string) => {
+    setEventQuotas(prev => ({
       ...prev,
-      [eventId]: prev[eventId] === false ? true : false
+      [eventTitle]: value === '' ? '' : parseInt(value, 10) || 0
+    }));
+  };
+
+  const handleStockOverrideChange = (merchId: string, value: string) => {
+    setStockOverrides(prev => ({
+      ...prev,
+      [merchId]: value === '' ? '' : parseInt(value, 10) || 0
     }));
   };
 
@@ -177,7 +205,6 @@ export function AdminSettingsPage() {
 
   return (
     <div className="min-h-screen pt-32 pb-32 px-4 md:px-6 bg-[#1a2f47] text-white relative">
-      {/* Background patterned mesh */}
       <div
         className="fixed inset-0 opacity-5 pointer-events-none"
         style={{
@@ -192,7 +219,7 @@ export function AdminSettingsPage() {
       />
 
       <div className="relative max-w-4xl mx-auto">
-        {/* Back Link to Admin Panel */}
+        {/* Back Link */}
         <div className="mb-6 flex justify-between items-center">
           <button
             onClick={() => navigate('/admin')}
@@ -203,30 +230,29 @@ export function AdminSettingsPage() {
           </button>
 
           <span className="text-[11px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full flex items-center gap-1.5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-            <ShieldCheck className="w-3.5 h-3.5" /> SECURE ADMIN SESSION
+            <ShieldCheck className="w-3.5 h-3.5" /> SECURE SESSION
           </span>
         </div>
 
         {/* Title */}
         <div className="text-center mb-10">
           <h1 className="text-3xl md:text-4xl font-black text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-            PENGATURAN TOKO &amp; EVENT
+            MANAJEMEN STOK &amp; KUOTA
           </h1>
           <div className="w-16 h-1 bg-[#F6E05E] mx-auto mt-3 mb-4" />
           <p className="text-white/70 max-w-md mx-auto text-sm" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-            Aktifkan/nonaktifkan pre-order secara global dan atur event mana saja yang ditampilkan di halaman pembelian.
+            Atur kuota penjualan Cheki per event serta lakukan override stok fisik Merchandise Kirin Day.
           </p>
         </div>
 
         {loadingData ? (
           <div className="py-20 text-center flex flex-col items-center justify-center gap-4">
             <Loader2 className="w-10 h-10 text-[#90CDF4] animate-spin" />
-            <p className="font-bold text-white/50 animate-pulse">Memuat pengaturan dari database...</p>
+            <p className="font-bold text-white/50 animate-pulse">Memuat data dari database...</p>
           </div>
         ) : (
           <div className="space-y-8">
             
-            {/* ALERT NOTIFICATION */}
             {message && (
               <div className={`p-4 rounded-xl border-2 font-bold text-sm text-center shadow-lg transition-all ${
                 message.type === 'success' 
@@ -237,82 +263,13 @@ export function AdminSettingsPage() {
               </div>
             )}
 
-            {/* MASTER SHOP TOGGLE SECTION */}
-            <div className="p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl relative overflow-hidden space-y-6">
-              {/* Toggle 1: Cheki Pre-Order */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 pb-6 border-b border-white/5">
-                <div>
-                  <h3 className="text-lg font-black text-white mb-1.5 flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    Status Pre-Order Cheki
-                  </h3>
-                  <p className="text-xs text-white/50 leading-relaxed max-w-lg" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    Mengaktifkan atau menonaktifkan pemesanan Cheki di halaman shop. Jika dinonaktifkan, bagian Cheki akan terkunci.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setChekiPoOpen(!chekiPoOpen)}
-                  className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-300 cursor-pointer shadow-md ${
-                    chekiPoOpen 
-                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/10' 
-                      : 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/10'
-                  }`}
-                  style={{ fontFamily: 'Montserrat, sans-serif' }}
-                >
-                  {chekiPoOpen ? (
-                    <>
-                      <ToggleRight className="w-5 h-5" /> BUKA (OPEN)
-                    </>
-                  ) : (
-                    <>
-                      <ToggleLeft className="w-5 h-5" /> TUTUP (CLOSED)
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Toggle 2: Merchandise Sales */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
-                <div>
-                  <h3 className="text-lg font-black text-white mb-1.5 flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    Status Penjualan Merchandise
-                  </h3>
-                  <p className="text-xs text-white/50 leading-relaxed max-w-lg" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    Mengaktifkan atau menonaktifkan pemesanan Merchandise di halaman shop. Jika dinonaktifkan, bagian Merchandise akan terkunci.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setMerchPoOpen(!merchPoOpen)}
-                  className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-300 cursor-pointer shadow-md ${
-                    merchPoOpen 
-                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/10' 
-                      : 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/10'
-                  }`}
-                  style={{ fontFamily: 'Montserrat, sans-serif' }}
-                >
-                  {merchPoOpen ? (
-                    <>
-                      <ToggleRight className="w-5 h-5" /> BUKA (OPEN)
-                    </>
-                  ) : (
-                    <>
-                      <ToggleLeft className="w-5 h-5" /> TUTUP (CLOSED)
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* EVENT VISIBILITY OVERRIDES LIST */}
+            {/* EVENT CHEKI QUOTA SETTINGS */}
             <div className="p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl">
               <h3 className="text-xl font-black text-white mb-2 flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                Visibilitas Event di Form Checkout
+                Kuota Cheki per Event
               </h3>
               <p className="text-sm text-white/50 leading-relaxed mb-6" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                Aktifkan atau sembunyikan event tertentu dari kartu pilihan event di halaman shop. Jika disembunyikan, event tidak dapat dipilih oleh pembeli.
+                Batasi jumlah total lembar Cheki yang dapat dipesan untuk event ini. Tulis <b>0</b> atau <b>kosongkan</b> untuk menonaktifkan batas kuota (unlimited).
               </p>
 
               {events.length === 0 ? (
@@ -321,41 +278,33 @@ export function AdminSettingsPage() {
                   <p className="text-xs font-bold">Tidak ada event yang ditemukan.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4">
                   {events.map((ev) => {
-                    const isVisible = eventVisibility[ev.id] !== false; // Visible by default
+                    const value = eventQuotas[ev.title] !== undefined ? eventQuotas[ev.title] : '';
                     return (
                       <div 
                         key={ev.id}
-                        onClick={() => toggleEventVisibility(ev.id)}
-                        className={`p-5 rounded-xl border-2 transition-all duration-300 cursor-pointer flex items-center justify-between gap-4 ${
-                          isVisible 
-                            ? 'border-[#90CDF4]/40 bg-[#90CDF4]/5 hover:border-[#90CDF4]'
-                            : 'border-white/5 bg-white/2 opacity-50 hover:opacity-75 hover:border-white/10'
-                        }`}
+                        className="p-4 rounded-xl border border-white/5 bg-white/2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                       >
                         <div className="min-w-0 flex-1">
-                          <h4 className="font-black text-sm text-white truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                          <h4 className="font-bold text-sm text-white" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                             {ev.title}
                           </h4>
-                          <p className="text-xs text-white/50 mt-1 leading-relaxed truncate">
+                          <p className="text-xs text-white/40 mt-0.5 leading-relaxed">
                             📅 {ev.date}
-                          </p>
-                          <p className="text-[10px] text-white/30 truncate">
-                            📍 {ev.venue}
                           </p>
                         </div>
 
-                        <div className="flex-shrink-0">
-                          {isVisible ? (
-                            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#90CDF4]/20 text-[#90CDF4] font-black text-[10px] uppercase tracking-wider" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                              <Eye className="w-3.5 h-3.5" /> Tampil
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 text-white/40 font-black text-[10px] uppercase tracking-wider" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                              <EyeOff className="w-3.5 h-3.5" /> Sembunyi
-                            </span>
-                          )}
+                        <div className="flex-shrink-0 flex items-center gap-3">
+                          <span className="text-xs text-white/50 font-bold">Kuota Cheki:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Unlimited"
+                            value={value}
+                            onChange={(e) => handleQuotaChange(ev.title, e.target.value)}
+                            className="w-32 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-center font-bold outline-none focus:border-[#90CDF4] text-sm"
+                          />
                         </div>
                       </div>
                     );
@@ -364,7 +313,57 @@ export function AdminSettingsPage() {
               )}
             </div>
 
-            {/* SAVE BUTTON DOCK */}
+            {/* MERCHANDISE STOCK MANUAL OVERRIDES */}
+            <div className="p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl">
+              <h3 className="text-xl font-black text-white mb-2 flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                Stok Manual Override Merchandise
+              </h3>
+              <p className="text-sm text-white/50 leading-relaxed mb-6" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                Override jumlah stok untuk barang-barang merchandise. Data override ini akan menggantikan sisa stok bawaan yang diimpor dari Contentful. Tulis <b>kosong</b> jika ingin menggunakan stok bawaan.
+              </p>
+
+              {merch.length === 0 ? (
+                <div className="text-center py-8 text-white/30 border border-dashed border-white/10 rounded-xl">
+                  <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-white/20" />
+                  <p className="text-xs font-bold">Tidak ada merchandise yang ditemukan.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {merch.map((item) => {
+                    const value = stockOverrides[item.id] !== undefined ? stockOverrides[item.id] : '';
+                    return (
+                      <div 
+                        key={item.id}
+                        className="p-4 rounded-xl border border-white/5 bg-white/2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-bold text-sm text-white" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                            {item.name}
+                          </h4>
+                          <p className="text-xs text-white/40 mt-0.5">
+                            Stok Bawaan: {item.stock} • Harga: Rp {item.price.toLocaleString('id-ID')}
+                          </p>
+                        </div>
+
+                        <div className="flex-shrink-0 flex items-center gap-3">
+                          <span className="text-xs text-white/50 font-bold">Override Stok:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Bawaan"
+                            value={value}
+                            onChange={(e) => handleStockOverrideChange(item.id, e.target.value)}
+                            className="w-32 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-center font-bold outline-none focus:border-[#90CDF4] text-sm"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* SAVE BUTTON */}
             <div className="flex justify-end pt-4">
               <button
                 type="button"

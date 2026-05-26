@@ -1,4 +1,4 @@
-import { Calendar, MapPin, Clock, Ticket, TrendingUp, Users } from 'lucide-react';
+import { Calendar, MapPin, Clock, Ticket, TrendingUp, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageSkeleton } from '../PageSkeleton';
@@ -10,6 +10,60 @@ export function SchedulePage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Calendar states
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
+
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (year: number, month: number) => {
+    return new Date(year, month, 1).getDay();
+  };
+
+  const year = currentCalendarDate.getFullYear();
+  const month = currentCalendarDate.getMonth();
+
+  const totalDays = getDaysInMonth(year, month);
+  const startDayOfWeek = getFirstDayOfMonth(year, month);
+
+  const monthNamesIndo = [
+    "JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI",
+    "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"
+  ];
+
+  const handlePrevMonth = () => {
+    setCurrentCalendarDate(new Date(year, month - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentCalendarDate(new Date(year, month + 1, 1));
+  };
+
+  const getEventsForDay = (cellDate: Date | null) => {
+    if (!cellDate) return [];
+    return events.filter(ev => {
+      if (!ev.dateObj) return false;
+      return (
+        ev.dateObj.getFullYear() === cellDate.getFullYear() &&
+        ev.dateObj.getMonth() === cellDate.getMonth() &&
+        ev.dateObj.getDate() === cellDate.getDate()
+      );
+    });
+  };
+
+  // Generate calendar cells
+  const cells = [];
+  for (let i = 0; i < startDayOfWeek; i++) {
+    cells.push({ day: null, date: null });
+  }
+  for (let d = 1; d <= totalDays; d++) {
+    const dDate = new Date(year, month, d);
+    cells.push({ day: d, date: dDate });
+  }
+
+  const weekdays = ["MIN", "SEN", "SEL", "RAB", "KAM", "JUM", "SAB"];
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -46,10 +100,10 @@ export function SchedulePage() {
             duration: 'TBA',
             ticketStatus: item.fields.ticketStatus || 'Coming Soon',
             ticketPrice: item.fields.ticketPrice || 'TBA',
-            ticketUrl: item.fields.ticketUrl || '',
             ticketEnabled: item.fields.ticketEnabled ?? true, // Default to true if not set
             attendingMembers,
-            type: item.fields.type || 'Event'
+            type: item.fields.type || 'Event',
+            dateObj
           };
         });
 
@@ -113,6 +167,114 @@ export function SchedulePage() {
           <p className="text-xl text-white/70 max-w-2xl mx-auto leading-relaxed" style={{ fontFamily: 'Montserrat, sans-serif' }}>
             Upcoming Performances at Istana BEC • Don't miss out on our high-energy shows and special events
           </p>
+        </div>
+
+        {/* Calendar View */}
+        <div className="mb-16 p-6 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-md shadow-xl relative overflow-hidden">
+          {/* Ambient background glow inside calendar */}
+          <div className="absolute -top-24 -left-24 w-48 h-48 bg-[#90CDF4]/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-[#F6E05E]/5 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Calendar Header */}
+          <div className="flex justify-between items-center mb-8 relative z-10">
+            <h2 className="text-lg font-black tracking-wider text-[#90CDF4] flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+              <Calendar className="w-5 h-5" /> EVENT CALENDAR
+            </h2>
+
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={handlePrevMonth}
+                className="p-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                title="Bulan Sebelumnya"
+              >
+                <ChevronLeft className="w-4 h-4 text-[#90CDF4]" />
+              </button>
+              
+              <span className="text-sm font-black text-white w-32 text-center tracking-widest" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                {monthNamesIndo[month]} {year}
+              </span>
+
+              <button 
+                onClick={handleNextMonth}
+                className="p-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                title="Bulan Berikutnya"
+              >
+                <ChevronRight className="w-4 h-4 text-[#90CDF4]" />
+              </button>
+            </div>
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="relative z-10">
+            {/* Weekdays Row */}
+            <div className="grid grid-cols-7 gap-2 mb-2 text-center text-xs font-black text-white/40 tracking-wider">
+              {weekdays.map(day => (
+                <div key={day} className="py-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>{day}</div>
+              ))}
+            </div>
+
+            {/* Days Grid */}
+            <div className="grid grid-cols-7 gap-2">
+              {cells.map((cell, idx) => {
+                const dayEvents = getEventsForDay(cell.date);
+                const hasEvents = dayEvents.length > 0;
+                
+                // Check if cell represents today
+                const isToday = cell.date && 
+                  new Date().getDate() === cell.date.getDate() &&
+                  new Date().getMonth() === cell.date.getMonth() &&
+                  new Date().getFullYear() === cell.date.getFullYear();
+
+                const handleCellClick = () => {
+                  if (hasEvents) {
+                    const firstEventId = dayEvents[0].id;
+                    const element = document.getElementById(firstEventId);
+                    if (element) {
+                      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      element.classList.add('ring-4', 'ring-[#F6E05E]/50');
+                      setTimeout(() => element.classList.remove('ring-4', 'ring-[#F6E05E]/50'), 2000);
+                    }
+                  }
+                };
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={handleCellClick}
+                    className={`
+                      aspect-square rounded-xl p-1.5 flex flex-col justify-between items-center transition-all relative border select-none
+                      ${cell.day === null ? 'border-transparent bg-transparent' : ''}
+                      ${cell.day !== null && !hasEvents ? 'border-white/5 bg-white/2 hover:border-white/20' : ''}
+                      ${hasEvents ? 'border-[#90CDF4]/40 bg-[#90CDF4]/10 hover:bg-[#90CDF4]/20 hover:border-[#90CDF4] cursor-pointer shadow-lg shadow-[#90CDF4]/5 group' : ''}
+                      ${isToday ? 'ring-2 ring-white/30 border-white/20' : ''}
+                    `}
+                  >
+                    {cell.day !== null && (
+                      <>
+                        {/* Day Number */}
+                        <span className={`text-sm font-black ${hasEvents ? 'text-[#90CDF4] scale-105' : 'text-white/60'} ${isToday ? 'text-white' : ''}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                          {cell.day}
+                        </span>
+
+                        {/* Event indicator (dots/badges) */}
+                        {hasEvents && (
+                          <div className="flex flex-col items-center gap-1 w-full pb-0.5">
+                            {/* Glow Dot */}
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#F6E05E] shadow-sm shadow-[#F6E05E]/50" />
+                            
+                            {/* Hover Event Title Tooltip */}
+                            <div className="absolute bottom-full mb-2 bg-black/90 border border-white/10 text-[9px] font-black uppercase tracking-wider text-white px-2 py-1 rounded shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-30 max-w-[150px] truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                              {dayEvents.map(ev => ev.title).join(', ')}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Events Grid */}

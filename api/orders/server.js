@@ -192,6 +192,64 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
       return res.status(400).json({ error: "Keranjang belanja kosong. Harap pilih minimal 1 item." });
     }
 
+    // Fetch shop settings for PO status and event quotas
+    const { data: settingsData } = await supabase
+      .from('shop_settings')
+      .select('*');
+
+    const settings = {};
+    if (settingsData) {
+      settingsData.forEach(item => {
+        settings[item.key] = item.value;
+      });
+    }
+
+    const chekiPoOpen = settings.cheki_po_open !== false;
+    const merchPoOpen = settings.merch_po_open !== false;
+
+    if (totalChekiCount > 0 && !chekiPoOpen) {
+      return res.status(400).json({ error: "Pre-order Cheki saat ini sedang ditutup." });
+    }
+
+    if (totalMerchCount > 0 && !merchPoOpen) {
+      return res.status(400).json({ error: "Penjualan Merchandise saat ini sedang ditutup." });
+    }
+
+    // Check event-level cheki quota
+    if (totalChekiCount > 0 && event_name) {
+      const eventQuotas = settings.event_cheki_quotas || {};
+      const quota = eventQuotas[event_name];
+      if (quota !== undefined && quota !== null && quota !== "" && Number(quota) > 0) {
+        const { data: eventOrders } = await supabase
+          .from('orders')
+          .select('cheki_items')
+          .eq('event_name', event_name)
+          .neq('status', 'rejected');
+
+        let currentChekiCount = 0;
+        if (eventOrders) {
+          eventOrders.forEach(o => {
+            let items = [];
+            try {
+              items = typeof o.cheki_items === 'string' ? JSON.parse(o.cheki_items) : o.cheki_items;
+            } catch(e) {}
+            if (Array.isArray(items)) {
+              items.forEach(item => {
+                currentChekiCount += (item.quantity || 0);
+              });
+            }
+          });
+        }
+
+        if (currentChekiCount + totalChekiCount > Number(quota)) {
+          const remaining = Math.max(0, Number(quota) - currentChekiCount);
+          return res.status(400).json({ 
+            error: `Kuota pre-order Cheki untuk event ini hampir penuh. Tersisa ${remaining} slot cheki.` 
+          });
+        }
+      }
+    }
+
     if (totalChekiCount > 50) {
       return res.status(400).json({ error: "Batas maksimal cheki dalam satu pesanan adalah 50." });
     }
@@ -467,12 +525,18 @@ app.put('/api/orders/:id', adminAuth, async (req, res) => {
 
 // Route: Backup all orders as a ZIP file (Admin)
 app.get('/api/orders/backup-zip', adminAuth, async (req, res) => {
+  const { include_archived } = req.query;
   try {
-    // 1. Fetch all orders from Supabase Database
-    const { data: allOrders, error: fetchErr } = await supabase
+    let query = supabase
       .from('orders')
       .select('*')
       .order('created_at', { ascending: false });
+
+    if (include_archived !== 'true') {
+      query = query.eq('is_archived', false);
+    }
+
+    const { data: allOrders, error: fetchErr } = await query;
 
     if (fetchErr || !allOrders) {
       throw fetchErr || new Error("Tidak ada data pesanan ditemukan.");
@@ -607,6 +671,57 @@ app.post('/api/orders/purge-proofs', adminAuth, async (req, res) => {
   }
 });
 
+// Route: Get event cheki quota status
+app.get('/api/orders/event-cheki-status', async (req, res) => {
+  const { event_name } = req.query;
+  if (!event_name) {
+    return res.status(400).json({ error: "Nama event diperlukan." });
+  }
+
+  try {
+    // 1. Fetch quota
+    const { data: quotaSetting } = await supabase
+      .from('shop_settings')
+      .select('value')
+      .eq('key', 'event_cheki_quotas')
+      .single();
+    const quotas = quotaSetting?.value || {};
+    const quota = quotas[event_name] !== undefined && quotas[event_name] !== null && quotas[event_name] !== "" ? parseInt(quotas[event_name], 10) : null;
+
+    // 2. Fetch current ordered count
+    const { data: eventOrders } = await supabase
+      .from('orders')
+      .select('cheki_items')
+      .eq('event_name', event_name)
+      .neq('status', 'rejected');
+
+    let currentChekiCount = 0;
+    if (eventOrders) {
+      eventOrders.forEach(o => {
+        let items = [];
+        try {
+          items = typeof o.cheki_items === 'string' ? JSON.parse(o.cheki_items) : o.cheki_items;
+        } catch(e) {}
+        if (Array.isArray(items)) {
+          items.forEach(item => {
+            currentChekiCount += (item.quantity || 0);
+          });
+        }
+      });
+    }
+
+    res.json({
+      event_name,
+      quota,
+      ordered: currentChekiCount,
+      remaining: quota !== null ? Math.max(0, quota - currentChekiCount) : null
+    });
+  } catch (err) {
+    console.error("Error event-cheki-status:", err);
+    res.status(500).json({ error: "Gagal memuat status kuota event." });
+  }
+});
+
 // Route: Get shop settings (Public)
 app.get('/api/settings', async (req, res) => {
   try {
@@ -631,20 +746,36 @@ app.get('/api/settings', async (req, res) => {
     if (!settings.event_visibility) {
       settings.event_visibility = {};
     }
+    if (settings.cheki_po_open === undefined) {
+      settings.cheki_po_open = true;
+    }
+    if (settings.merch_po_open === undefined) {
+      settings.merch_po_open = true;
+    }
+    if (!settings.event_cheki_quotas) {
+      settings.event_cheki_quotas = {};
+    }
+    if (!settings.merch_stock_overrides) {
+      settings.merch_stock_overrides = {};
+    }
 
     res.json(settings);
   } catch (err) {
     console.error("Fetch settings error:", err);
     res.json({
       master_status: { is_open: true },
-      event_visibility: {}
+      event_visibility: {},
+      cheki_po_open: true,
+      merch_po_open: true,
+      event_cheki_quotas: {},
+      merch_stock_overrides: {}
     });
   }
 });
 
 // Route: Update shop settings (Admin)
 app.put('/api/settings', adminAuth, async (req, res) => {
-  const { master_status, event_visibility } = req.body;
+  const { master_status, event_visibility, cheki_po_open, merch_po_open, event_cheki_quotas, merch_stock_overrides } = req.body;
 
   try {
     const promises = [];
@@ -662,6 +793,38 @@ app.put('/api/settings', adminAuth, async (req, res) => {
         supabase
           .from('shop_settings')
           .upsert({ key: 'event_visibility', value: event_visibility })
+      );
+    }
+
+    if (cheki_po_open !== undefined) {
+      promises.push(
+        supabase
+          .from('shop_settings')
+          .upsert({ key: 'cheki_po_open', value: cheki_po_open })
+      );
+    }
+
+    if (merch_po_open !== undefined) {
+      promises.push(
+        supabase
+          .from('shop_settings')
+          .upsert({ key: 'merch_po_open', value: merch_po_open })
+      );
+    }
+
+    if (event_cheki_quotas !== undefined) {
+      promises.push(
+        supabase
+          .from('shop_settings')
+          .upsert({ key: 'event_cheki_quotas', value: event_cheki_quotas })
+      );
+    }
+
+    if (merch_stock_overrides !== undefined) {
+      promises.push(
+        supabase
+          .from('shop_settings')
+          .upsert({ key: 'merch_stock_overrides', value: merch_stock_overrides })
       );
     }
 

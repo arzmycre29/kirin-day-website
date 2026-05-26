@@ -9,10 +9,19 @@ export function AdminLoginPage() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  // If already logged in, redirect to admin orders page
+  // If already logged in, redirect to admin dashboard
   useEffect(() => {
     const checkLogin = async () => {
       const savedPass = localStorage.getItem('admin_password');
+      const savedTime = localStorage.getItem('admin_login_timestamp');
+
+      // Check if session has expired (24 hours)
+      if (savedTime && Date.now() - parseInt(savedTime, 10) > 24 * 60 * 60 * 1000) {
+        localStorage.removeItem('admin_password');
+        localStorage.removeItem('admin_login_timestamp');
+        return;
+      }
+
       if (savedPass) {
         setIsLoading(true);
         try {
@@ -22,9 +31,10 @@ export function AdminLoginPage() {
             }
           });
           if (res.ok) {
-            navigate('/admin/orders');
+            navigate('/admin');
           } else {
             localStorage.removeItem('admin_password');
+            localStorage.removeItem('admin_login_timestamp');
           }
         } catch (e) {
           // offline or error, let them try logging in manually
@@ -62,7 +72,8 @@ export function AdminLoginPage() {
 
       // If success, store in localStorage and redirect
       localStorage.setItem('admin_password', password);
-      navigate('/admin/orders');
+      localStorage.setItem('admin_login_timestamp', Date.now().toString());
+      navigate('/admin');
 
     } catch (err: any) {
       console.error("Admin login error:", err);
