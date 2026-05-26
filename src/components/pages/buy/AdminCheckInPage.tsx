@@ -98,7 +98,7 @@ export function AdminCheckInPage() {
         status: 'approved',
         search: query,
         page: '1',
-        show_archived: 'true' // show both archived and active for checking in if needed
+        show_archived: 'false'
       });
       const res = await fetch(`/api/orders?${queryParams.toString()}`, {
         headers: {
@@ -281,10 +281,10 @@ export function AdminCheckInPage() {
                         className={`hover:bg-white/5 transition-colors ${item.is_redeemed ? 'bg-emerald-950/10' : ''}`}
                       >
                         <td className="py-4 px-5">
-                          <p className="font-black text-white/90 text-sm" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                            {item.order_id}
+                          <p className="font-black text-white text-sm" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                            {item.buyer_name}
                           </p>
-                          <p className="font-bold text-white text-xs leading-tight mt-0.5">{item.buyer_name}</p>
+                          <p className="font-bold text-[#90CDF4] text-xs leading-tight mt-0.5">{item.order_id}</p>
                           <div className="flex gap-2 mt-1 text-[11px]">
                             <a 
                               href={`https://wa.me/${item.buyer_whatsapp.replace('+', '')}`} 

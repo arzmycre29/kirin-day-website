@@ -238,7 +238,7 @@ export function AdminSettingsPage() {
             )}
 
             {/* MASTER SHOP TOGGLE SECTION */}
-            <div className="p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl relative overflow-hidden space-y-6">
+            <div className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl relative overflow-hidden space-y-6">
               {/* Toggle 1: Cheki Pre-Order */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 pb-6 border-b border-white/5">
                 <div>
@@ -307,7 +307,7 @@ export function AdminSettingsPage() {
             </div>
 
             {/* EVENT VISIBILITY OVERRIDES LIST */}
-            <div className="p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl">
+            <div className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl">
               <h3 className="text-xl font-black text-white mb-2 flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 Visibilitas Event di Form Checkout
               </h3>

@@ -918,7 +918,7 @@ export function BuyPage() {
             <div 
               ref={detailsRef} 
               id="section-details" 
-              className="p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm"
+              className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm"
             >
               <h2 className="text-2xl font-black text-[#90CDF4] mb-6 flex items-center gap-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 <User className="w-6 h-6" /> 1. DATA IDENTITAS PEMBELI
@@ -1029,7 +1029,7 @@ export function BuyPage() {
             <div 
               ref={itemsRef} 
               id="section-items" 
-              className="p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm"
+              className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm"
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <h2 className="text-2xl font-black text-[#90CDF4] flex items-center gap-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
@@ -1273,7 +1273,7 @@ export function BuyPage() {
             </div>
 
             {/* SECTION 3: MERCH ORDER */}
-            <div className="p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm">
+            <div className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm">
               <h2 className="text-2xl font-black text-[#90CDF4] mb-6 flex items-center gap-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 <ShoppingBag className="w-6 h-6" /> 3. PESANAN MERCHANDISE
               </h2>
@@ -1401,7 +1401,7 @@ export function BuyPage() {
             </div>
 
             {/* SECTION 4: PILIH EVENT UTAMA */}
-            <div className="p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm">
+            <div className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm">
               <h2 className="text-2xl font-black text-[#90CDF4] mb-6 flex items-center gap-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 <Calendar className="w-6 h-6" /> 4. PILIH EVENT UTAMA
               </h2>
@@ -1483,7 +1483,7 @@ export function BuyPage() {
             </div>
 
             {/* SECTION 5: REDEEM METHOD & NOTES */}
-            <div className="p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm">
+            <div className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm">
               <h2 className="text-2xl font-black text-[#90CDF4] mb-6 flex items-center gap-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 <MapPin className="w-6 h-6" /> 5. METODE PENGAMBILAN
               </h2>
@@ -1590,7 +1590,7 @@ export function BuyPage() {
             <div 
               ref={paymentRef} 
               id="section-payment" 
-              className="p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm"
+              className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm"
             >
               <h2 className="text-2xl font-black text-[#90CDF4] mb-6 flex items-center gap-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 <Gift className="w-6 h-6" /> 5. METODE PEMBAYARAN &amp; VERIFIKASI

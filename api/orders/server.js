@@ -7,7 +7,7 @@ const AdmZip = require('adm-zip');
 require('dotenv').config();
 
 const { supabase } = require('./supabase');
-const { sendEmail } = require('./email');
+const { sendEmail, buildHtmlEmail } = require('./email');
 const buyConfig = require('../../config/buyConfig.json');
 
 const app = express();
@@ -345,31 +345,78 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
     }
 
     // 9. Send Confirmation Email to Buyer
-    const orderSummaryHtml = `
-      <h3>Detail Pesanan Anda:</h3>
-      <ul>
-        ${chekiList.map(item => `<li>Cheki ${item.member_name} (${item.type}) x${item.quantity} - ${formatRp(item.subtotal)}</li>`).join('')}
-        ${merchList.map(item => `<li>${item.merch_name} x${item.quantity} - ${formatRp(item.subtotal)}</li>`).join('')}
-      </ul>
-      <p><b>Event:</b> ${event_name}</p>
-      <p><b>Metode Pengambilan:</b> ${redeem_method === 'event' ? `Ambil di Event` : `Kirim ke Alamat (${shipping_address})`}</p>
-      <p><b>Total Pembayaran:</b> ${formatRp(calculatedTotal)}</p>
-      <p><b>Metode Pembayaran:</b> ${payment_method.toUpperCase()}</p>
+    const chekiRows = chekiList.map(item => `
+      <tr>
+        <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; color: #334155;">
+          <strong>Cheki ${item.member_name}</strong><br>
+          <span style="font-size: 12px; color: #64748b;">Tipe: ${item.type}</span>
+        </td>
+        <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; text-align: center; color: #334155;">x${item.quantity}</td>
+        <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; text-align: right; color: #334155;">${formatRp(item.subtotal)}</td>
+      </tr>
+    `).join('');
+
+    const merchRows = merchList.map(item => `
+      <tr>
+        <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; color: #334155;">
+          <strong>${item.merch_name}</strong>
+        </td>
+        <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; text-align: center; color: #334155;">x${item.quantity}</td>
+        <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; text-align: right; color: #334155;">${formatRp(item.subtotal)}</td>
+      </tr>
+    `).join('');
+
+    const detailsHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 5px;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #7c3aed; padding-bottom: 5px;">Rincian Belanja</h4>
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="text-align: left; font-size: 12px; color: #64748b; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">Item</th>
+              <th style="text-align: center; font-size: 12px; color: #64748b; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; width: 60px;">Jumlah</th>
+              <th style="text-align: right; font-size: 12px; color: #64748b; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; width: 100px;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${chekiRows}
+            ${merchRows}
+          </tbody>
+        </table>
+        
+        <div style="margin-top: 15px; border-top: 2px dashed #e2e8f0; padding-top: 10px; font-size: 14px; color: #334155;">
+          <table style="width: 100%;">
+            ${event_name ? `<tr><td style="padding: 3px 0; color: #64748b;">Event:</td><td style="padding: 3px 0; text-align: right; font-weight: 500; color: #0f172a;">${event_name}</td></tr>` : ''}
+            <tr><td style="padding: 3px 0; color: #64748b;">Metode Pengambilan:</td><td style="padding: 3px 0; text-align: right; font-weight: 500; color: #0f172a;">${redeem_method === 'event' ? 'Ambil di Event' : `Kirim ke Alamat (${shipping_address})`}</td></tr>
+            <tr><td style="padding: 3px 0; color: #64748b;">Metode Pembayaran:</td><td style="padding: 3px 0; text-align: right; font-weight: 500; color: #0f172a;">${payment_method.toUpperCase()}</td></tr>
+            <tr>
+              <td style="padding: 10px 0 0 0; font-size: 16px; font-weight: bold; color: #0f172a;">Total Pembayaran:</td>
+              <td style="padding: 10px 0 0 0; text-align: right; font-size: 16px; font-weight: bold; color: #7c3aed;">${formatRp(calculatedTotal)}</td>
+            </tr>
+          </table>
+        </div>
+      </div>
     `;
 
-    const emailBody = `Halo ${buyer_name},\n\nTerima kasih telah melakukan pemesanan di Kirin Day Shop!\n\n` +
-      `Pesanan Anda dengan ID **${orderId}** telah berhasil kami terima.\n\n` +
-      `${orderSummaryHtml}\n\n` +
-      `Pesanan Anda saat ini berstatus **Menunggu Verifikasi** dan akan kami verifikasi dalam waktu maksimal ${buyConfig.verificationSLAHours} jam.\n\n` +
-      `Anda dapat mengecek status pesanan Anda secara langsung pada tautan berikut:\n` +
-      `${getAppUrl(req)}/buy/status?id=${orderId}\n\n` +
-      `Terima kasih atas dukungannya!\n\nSalam,\nKirin Day Management`;
+    const mainText = `Terima kasih telah melakukan pemesanan di Kirin Day Shop!<br><br>` +
+      `Pesanan Anda dengan ID <strong>${orderId}</strong> telah berhasil kami terima.<br><br>` +
+      `Pesanan Anda saat ini berstatus <strong>Menunggu Verifikasi</strong> dan akan kami verifikasi dalam waktu maksimal ${buyConfig.verificationSLAHours} jam.<br><br>` +
+      `Anda dapat memantau status pesanan Anda secara langsung dengan menekan tombol di bawah ini.`;
+
+    const emailHtml = buildHtmlEmail({
+      title: "Pesanan Diterima",
+      subtitle: `Order ID: #${orderId}`,
+      buyerName: buyer_name,
+      mainText: mainText,
+      detailsHtml: detailsHtml,
+      ctaUrl: `${getAppUrl(req)}/buy/status?id=${orderId}`,
+      ctaText: "Cek Status Pesanan"
+    });
 
     // 9. Send Confirmation Email to Buyer (Background Task)
     sendEmail({
       to: buyer_email,
       subject: `[Order #${orderId}] Pesananmu sudah kami terima!`,
-      body: emailBody
+      html: emailHtml
     }).catch(err => {
       console.error(`Gagal mengirim email konfirmasi latar belakang untuk order ${orderId}:`, err);
     });
@@ -480,34 +527,48 @@ app.put('/api/orders/:id', adminAuth, async (req, res) => {
 
     // 3. Send Notification Email to Buyer
     let emailSubject = '';
-    let emailBody = '';
+    let emailHtml = '';
 
     if (status === 'approved') {
       emailSubject = `Pesananmu #${id} telah diverifikasi!`;
+      const currentEventName = order.event_name || buyConfig.eventInfo.name || 'Kirin Day';
       const eventDetails = order.redeem_method === 'event'
-        ? `Sampai jumpa di event (${buyConfig.eventInfo.name}).`
+        ? `Sampai jumpa di event (${currentEventName}).`
         : `Pesananmu akan segera kami kirimkan ke alamat tujuan Anda.`;
       
-      emailBody = `Halo ${order.buyer_name},\n\n` +
-        `Kabar baik! Bukti pembayaran untuk pesanan Anda **#${id}** telah diverifikasi oleh tim kami.\n\n` +
-        `${eventDetails}\n\n` +
-        `Anda dapat memantau status terbaru pesanan Anda kapan saja di sini:\n` +
-        `${getAppUrl(req)}/buy/status?id=${id}\n\n` +
-        `Terima kasih atas pembelian Anda!\n\nSalam,\nKirin Day Management`;
+      const mainText = `Kabar baik! Bukti pembayaran untuk pesanan Anda <strong>#${id}</strong> telah diverifikasi oleh tim kami.<br><br>` +
+        `<strong>${eventDetails}</strong><br><br>` +
+        `Silakan pantau status terbaru pesanan Anda kapan saja dengan menekan tombol di bawah ini.`;
+      
+      emailHtml = buildHtmlEmail({
+        title: "Pembayaran Terverifikasi",
+        subtitle: `Order ID: #${id}`,
+        buyerName: order.buyer_name,
+        mainText: mainText,
+        ctaUrl: `${getAppUrl(req)}/buy/status?id=${id}`,
+        ctaText: "Cek Status Pesanan"
+      });
     } else {
       emailSubject = `Update mengenai Pesananmu #${id}`;
-      emailBody = `Halo ${order.buyer_name},\n\n` +
-        `Mohon maaf, pesanan Anda dengan ID **#${id}** tidak dapat kami proses.\n\n` +
-        `**Alasan:** ${admin_notes}\n\n` +
-        `Jika Anda merasa ini adalah kesalahan atau butuh informasi lebih lanjut, silakan hubungi tim kami melalui WhatsApp atau balas email ini.\n\n` +
-        `Terima kasih.\n\nSalam,\nKirin Day Management`;
+      const mainText = `Mohon maaf, pesanan Anda dengan ID <strong>#${id}</strong> tidak dapat kami proses.<br><br>` +
+        `<strong>Alasan:</strong> ${admin_notes}<br><br>` +
+        `Jika Anda merasa ini adalah kesalahan atau membutuhkan informasi lebih lanjut, silakan hubungi tim kami melalui WhatsApp atau balas email ini.`;
+      
+      emailHtml = buildHtmlEmail({
+        title: "Pesanan Ditolak",
+        subtitle: `Order ID: #${id}`,
+        buyerName: order.buyer_name,
+        mainText: mainText,
+        ctaUrl: `${getAppUrl(req)}/buy/status?id=${id}`,
+        ctaText: "Cek Status Pesanan"
+      });
     }
 
     // 3. Send Notification Email to Buyer (Background Task)
     sendEmail({
       to: order.buyer_email,
       subject: emailSubject,
-      body: emailBody
+      html: emailHtml
     }).catch(err => {
       console.error(`Gagal mengirim email update status latar belakang untuk order ${id}:`, err);
     });

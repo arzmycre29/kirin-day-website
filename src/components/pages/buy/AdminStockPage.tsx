@@ -264,7 +264,7 @@ export function AdminStockPage() {
             )}
 
             {/* EVENT CHEKI QUOTA SETTINGS */}
-            <div className="p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl">
+            <div className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl">
               <h3 className="text-xl font-black text-white mb-2 flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 Kuota Cheki per Event
               </h3>
@@ -314,7 +314,7 @@ export function AdminStockPage() {
             </div>
 
             {/* MERCHANDISE STOCK MANUAL OVERRIDES */}
-            <div className="p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl">
+            <div className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl">
               <h3 className="text-xl font-black text-white mb-2 flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 Stok Manual Override Merchandise
               </h3>

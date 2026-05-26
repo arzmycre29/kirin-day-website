@@ -176,8 +176,8 @@ export function SchedulePage() {
           <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-[#F6E05E]/5 rounded-full blur-3xl pointer-events-none" />
 
           {/* Calendar Header */}
-          <div className="flex justify-between items-center mb-8 relative z-10">
-            <h2 className="text-lg font-black tracking-wider text-[#90CDF4] flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+          <div className="flex flex-col sm:flex-row justify-between items-center mb-6 relative z-10 gap-4">
+            <h2 className="text-base sm:text-lg font-black tracking-wider text-[#90CDF4] flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
               <Calendar className="w-5 h-5" /> EVENT CALENDAR
             </h2>
 
@@ -190,7 +190,7 @@ export function SchedulePage() {
                 <ChevronLeft className="w-4 h-4 text-[#90CDF4]" />
               </button>
               
-              <span className="text-sm font-black text-white w-32 text-center tracking-widest" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+              <span className="text-xs sm:text-sm font-black text-white w-28 sm:w-32 text-center tracking-widest" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 {monthNamesIndo[month]} {year}
               </span>
 
@@ -207,14 +207,14 @@ export function SchedulePage() {
           {/* Calendar Grid */}
           <div className="relative z-10">
             {/* Weekdays Row */}
-            <div className="grid grid-cols-7 gap-2 mb-2 text-center text-xs font-black text-white/40 tracking-wider">
+            <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center text-[10px] sm:text-xs font-black text-white/40 tracking-wider">
               {weekdays.map(day => (
                 <div key={day} className="py-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>{day}</div>
               ))}
             </div>
 
             {/* Days Grid */}
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {cells.map((cell, idx) => {
                 const dayEvents = getEventsForDay(cell.date);
                 const hasEvents = dayEvents.length > 0;
@@ -224,7 +224,7 @@ export function SchedulePage() {
                   new Date().getDate() === cell.date.getDate() &&
                   new Date().getMonth() === cell.date.getMonth() &&
                   new Date().getFullYear() === cell.date.getFullYear();
-
+ 
                 const handleCellClick = () => {
                   if (hasEvents) {
                     const firstEventId = dayEvents[0].id;
@@ -242,7 +242,7 @@ export function SchedulePage() {
                     key={idx}
                     onClick={handleCellClick}
                     className={`
-                      aspect-square rounded-xl p-1.5 flex flex-col justify-between items-center transition-all relative border select-none
+                      aspect-square rounded-lg sm:rounded-xl p-1 sm:p-1.5 flex flex-col justify-between items-center transition-all relative border select-none
                       ${cell.day === null ? 'border-transparent bg-transparent' : ''}
                       ${cell.day !== null && !hasEvents ? 'border-white/5 bg-white/2 hover:border-white/20' : ''}
                       ${hasEvents ? 'border-[#90CDF4]/40 bg-[#90CDF4]/10 hover:bg-[#90CDF4]/20 hover:border-[#90CDF4] cursor-pointer shadow-lg shadow-[#90CDF4]/5 group' : ''}
@@ -252,7 +252,7 @@ export function SchedulePage() {
                     {cell.day !== null && (
                       <>
                         {/* Day Number */}
-                        <span className={`text-sm font-black ${hasEvents ? 'text-[#90CDF4] scale-105' : 'text-white/60'} ${isToday ? 'text-white' : ''}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                        <span className={`text-xs sm:text-sm font-black ${hasEvents ? 'text-[#90CDF4] scale-105' : 'text-white/60'} ${isToday ? 'text-white' : ''}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
                           {cell.day}
                         </span>
 
@@ -260,7 +260,7 @@ export function SchedulePage() {
                         {hasEvents && (
                           <div className="flex flex-col items-center gap-1 w-full pb-0.5">
                             {/* Glow Dot */}
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#F6E05E] shadow-sm shadow-[#F6E05E]/50" />
+                            <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-[#F6E05E] shadow-sm shadow-[#F6E05E]/50" />
                             
                             {/* Hover Event Title Tooltip */}
                             <div className="absolute bottom-full mb-2 bg-black/90 border border-white/10 text-[9px] font-black uppercase tracking-wider text-white px-2 py-1 rounded shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-30 max-w-[150px] truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
