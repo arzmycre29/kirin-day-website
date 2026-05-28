@@ -100,6 +100,7 @@ export function SchedulePage() {
             duration: 'TBA',
             ticketStatus: item.fields.ticketStatus || 'Coming Soon',
             ticketPrice: item.fields.ticketPrice || 'TBA',
+            ticketUrl: item.fields.ticketUrl || '',
             ticketEnabled: item.fields.ticketEnabled ?? true, // Default to true if not set
             attendingMembers,
             type: item.fields.type || 'Event',
@@ -252,19 +253,33 @@ export function SchedulePage() {
                     {cell.day !== null && (
                       <>
                         {/* Day Number */}
-                        <span className={`text-xs sm:text-sm font-black ${hasEvents ? 'text-[#90CDF4] scale-105' : 'text-white/60'} ${isToday ? 'text-white' : ''}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                        <span className={`text-xs sm:text-sm font-black ${hasEvents ? 'text-[#90CDF4] scale-105' : 'text-white/60'} ${isToday ? 'text-white' : ''} self-center sm:self-start`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
                           {cell.day}
                         </span>
 
                         {/* Event indicator (dots/badges) */}
                         {hasEvents && (
-                          <div className="flex flex-col items-center gap-1 w-full pb-0.5">
-                            {/* Glow Dot */}
-                            <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-[#F6E05E] shadow-sm shadow-[#F6E05E]/50" />
+                          <div className="flex flex-col items-center gap-1 w-full pb-0.5 mt-auto">
+                            {/* Glow Dot (Mobile only) */}
+                            <span className="w-1 h-1 sm:hidden rounded-full bg-[#F6E05E] shadow-sm shadow-[#F6E05E]/50" />
                             
-                            {/* Hover Event Title Tooltip */}
-                            <div className="absolute bottom-full mb-2 bg-black/90 border border-white/10 text-[9px] font-black uppercase tracking-wider text-white px-2 py-1 rounded shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-30 max-w-[150px] truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                            {/* Hover Event Title Tooltip (Mobile only) */}
+                            <div className="absolute bottom-full mb-2 bg-black/90 border border-white/10 text-[9px] font-black uppercase tracking-wider text-white px-2 py-1 rounded shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-30 max-w-[150px] truncate sm:hidden" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                               {dayEvents.map(ev => ev.title).join(', ')}
+                            </div>
+
+                            {/* Event Title inside calendar box (Desktop only) */}
+                            <div className="hidden sm:flex flex-col gap-1 w-full px-1 overflow-y-auto max-h-[70%] custom-scrollbar">
+                              {dayEvents.map((ev, index) => (
+                                <div
+                                  key={index}
+                                  className="text-[9px] font-bold text-white bg-[#152238]/60 border border-[#90CDF4]/20 rounded py-0.5 px-1 truncate text-center w-full uppercase tracking-wider"
+                                  style={{ fontFamily: 'Montserrat, sans-serif' }}
+                                  title={ev.title}
+                                >
+                                  {ev.title}
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}
