@@ -438,8 +438,8 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
 
 // Route: Get all orders (Admin)
 app.get('/api/orders', adminAuth, async (req, res) => {
-  const { status, search, page = 1, show_archived = 'false' } = req.query;
-  const limit = 20;
+  const { status, search, page = 1, show_archived = 'false', limit: queryLimit } = req.query;
+  const limit = queryLimit ? parseInt(queryLimit, 10) : 20;
   const offset = (parseInt(page, 10) - 1) * limit;
 
   try {

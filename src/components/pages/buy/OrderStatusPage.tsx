@@ -3,8 +3,9 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { 
   Search, FileText, CheckCircle2, XCircle, Clock, Copy, Check, 
   ExternalLink, MessageSquare, ShoppingBag, ArrowLeft, Loader2,
-  Calendar, MapPin, User, Mail, Phone, Instagram, Wallet
+  Calendar, MapPin, User, Mail, Phone, Instagram, Wallet, CheckSquare
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import buyConfig from '../../../../config/buyConfig.js';
 
 interface OrderItem {
@@ -37,6 +38,7 @@ interface Order {
   created_at: string;
   updated_at: string;
   event_name?: string | null;
+  is_redeemed?: boolean;
 }
 
 export function OrderStatusPage() {
@@ -431,6 +433,53 @@ export function OrderStatusPage() {
 
               </div>
             </div>
+
+            {/* 3b. QR TICKET FOR EVENT REDEMPTION */}
+            {order.status === 'approved' && order.redeem_method === 'event' && (
+              <div className="p-6 sm:p-8 rounded-2xl border-2 border-[#90CDF4]/30 bg-[#152238]/60 backdrop-blur-md text-center shadow-xl relative overflow-hidden">
+                {/* Visual glows */}
+                <div className="absolute -top-12 -left-12 w-24 h-24 bg-[#90CDF4]/10 rounded-full blur-2xl pointer-events-none" />
+                <div className="absolute -bottom-12 -right-12 w-24 h-24 bg-[#F6E05E]/5 rounded-full blur-2xl pointer-events-none" />
+
+                {order.is_redeemed ? (
+                  <div className="flex flex-col items-center py-4">
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400 flex items-center justify-center mb-4">
+                      <CheckSquare className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-xl font-black text-emerald-400 uppercase tracking-wider mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      PESANAN TELAH DIAMBIL
+                    </h3>
+                    <p className="text-sm text-white/70 max-w-md mx-auto leading-relaxed" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      Terima kasih! Pesanan Anda dengan ID <strong className="text-white">{order.order_id}</strong> telah sukses di-check-in di booth event kami. Selamat menikmati merchandise & cheki Anda!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <h3 className="text-md sm:text-lg font-black text-[#90CDF4] uppercase tracking-wider mb-2 flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      TIKET PENGAMBILAN QR CODE
+                    </h3>
+                    <p className="text-xs text-white/50 mb-6 max-w-sm" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      Tunjukkan QR Code di bawah ini ke panitia di booth event untuk melakukan serah terima belanjaan secara instan.
+                    </p>
+                    
+                    <div className="bg-white p-5 rounded-2xl inline-block shadow-lg border-4 border-[#90CDF4] transform transition-transform hover:scale-[1.02] duration-300">
+                      <QRCodeSVG 
+                        value={order.order_id} 
+                        size={200} 
+                        level="Q" 
+                        includeMargin={false}
+                        fgColor="#152238"
+                      />
+                    </div>
+                    
+                    <div className="mt-6 flex flex-col items-center gap-1">
+                      <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">ORDER SECURE KEY</span>
+                      <span className="text-sm font-black text-[#F6E05E] tracking-widest select-all uppercase">{order.order_id}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 4. BUYER INFO & REDEEM INFO */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
