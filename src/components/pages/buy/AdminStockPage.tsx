@@ -24,6 +24,31 @@ export function AdminStockPage() {
   const [memberQuotas, setMemberQuotas] = useState<Record<string, Record<string, number | string>>>({});
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
+  // Synchronize event total quotas dynamically when events, members, or memberQuotas load
+  useEffect(() => {
+    if (events.length === 0 || members.length === 0) return;
+    
+    setEventQuotas(prev => {
+      const updated = { ...prev };
+      let changed = false;
+      
+      events.forEach(ev => {
+        const evQuotas = memberQuotas[ev.title] || {};
+        let sum = 0;
+        members.forEach(m => {
+          sum += (evQuotas[m.id] !== undefined ? parseInt(evQuotas[m.id] as any, 10) || 0 : 0);
+        });
+        
+        if (updated[ev.title] !== sum) {
+          updated[ev.title] = sum;
+          changed = true;
+        }
+      });
+      
+      return changed ? updated : prev;
+    });
+  }, [events, members, memberQuotas]);
+
   // Verify admin session on mount (24h revocation)
   useEffect(() => {
     const checkAuth = async () => {
@@ -216,11 +241,7 @@ export function AdminStockPage() {
   const handleMemberQuotaChange = (eventTitle: string, memberId: string, value: string) => {
     setMemberQuotas(prev => {
       const eventQuota = { ...(prev[eventTitle] || {}) };
-      if (value === '') {
-        delete eventQuota[memberId];
-      } else {
-        eventQuota[memberId] = parseInt(value, 10) || 0;
-      }
+      eventQuota[memberId] = value === '' ? 0 : parseInt(value, 10) || 0;
       return {
         ...prev,
         [eventTitle]: eventQuota
@@ -345,10 +366,11 @@ export function AdminStockPage() {
                             <input
                               type="number"
                               min="0"
-                              placeholder="Unlimited"
+                              readOnly
+                              disabled
+                              placeholder="0"
                               value={value}
-                              onChange={(e) => handleQuotaChange(ev.title, e.target.value)}
-                              className="w-32 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-center font-bold outline-none focus:border-[#90CDF4] text-sm"
+                              className="w-32 px-3 py-2 rounded-lg bg-black/60 border border-white/5 text-white/50 text-center font-bold outline-none text-sm cursor-not-allowed"
                             />
                           </div>
                         </div>
@@ -358,14 +380,14 @@ export function AdminStockPage() {
                             <p className="text-[11px] text-white/40 font-bold uppercase tracking-wide">Kuota Cheki Per Member (Event ini):</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               {members.map((m) => {
-                                const mQuota = memberQuotas[ev.title]?.[m.id] !== undefined ? memberQuotas[ev.title][m.id] : '';
+                                const mQuota = memberQuotas[ev.title]?.[m.id] !== undefined ? memberQuotas[ev.title][m.id] : 0;
                                 return (
                                   <div key={m.id} className="flex items-center justify-between gap-3 bg-black/20 p-2.5 rounded-lg border border-white/5">
                                     <span className="text-xs font-bold text-white/80">{m.name}</span>
                                     <input
                                       type="number"
                                       min="0"
-                                      placeholder="Unlimited"
+                                      placeholder="0"
                                       value={mQuota}
                                       onChange={(e) => handleMemberQuotaChange(ev.title, m.id, e.target.value)}
                                       className="w-24 px-2 py-1 rounded bg-black/40 border border-white/10 text-white text-center font-bold outline-none focus:border-[#90CDF4] text-xs"

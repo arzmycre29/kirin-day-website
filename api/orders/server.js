@@ -252,7 +252,7 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
       const eventMemberQuotas = settings.event_member_cheki_quotas || {};
       const memberQuotas = eventMemberQuotas[event_name] || {};
       
-      const memberQuotasDefined = Object.values(memberQuotas).some(q => q !== undefined && q !== null && q !== "" && Number(q) > 0);
+      const memberQuotasDefined = Object.keys(memberQuotas).length > 0;
       if (memberQuotasDefined) {
         const { data: eventOrders } = await supabase
           .from('orders')
@@ -297,9 +297,7 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
       }
     }
 
-    if (totalChekiCount > 50) {
-      return res.status(400).json({ error: "Batas maksimal cheki dalam satu pesanan adalah 50." });
-    }
+
 
     // 4. Redeem Method validation
     if (redeem_method === 'ship') {
@@ -861,7 +859,7 @@ app.get('/api/orders/event-cheki-status', async (req, res) => {
       quota,
       ordered: currentChekiCount,
       remaining: quota !== null ? Math.max(0, quota - currentChekiCount) : null,
-      member_quotas,
+      member_quotas: memberQuotas,
       member_ordered: memberOrdered,
       member_remaining: memberRemaining
     });
