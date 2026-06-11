@@ -248,6 +248,53 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
           });
         }
       }
+      // Check member-level cheki quota
+      const eventMemberQuotas = settings.event_member_cheki_quotas || {};
+      const memberQuotas = eventMemberQuotas[event_name] || {};
+      
+      const memberQuotasDefined = Object.values(memberQuotas).some(q => q !== undefined && q !== null && q !== "" && Number(q) > 0);
+      if (memberQuotasDefined) {
+        const { data: eventOrders } = await supabase
+          .from('orders')
+          .select('cheki_items')
+          .eq('event_name', event_name)
+          .neq('status', 'rejected');
+
+        const memberOrdered = {};
+        if (eventOrders) {
+          eventOrders.forEach(o => {
+            let items = [];
+            try {
+              items = typeof o.cheki_items === 'string' ? JSON.parse(o.cheki_items) : o.cheki_items;
+            } catch(e) {}
+            if (Array.isArray(items)) {
+              items.forEach(item => {
+                const mid = item.member_id || item.id;
+                if (mid) {
+                  memberOrdered[mid] = (memberOrdered[mid] || 0) + (item.quantity || 0);
+                }
+              });
+            }
+          });
+        }
+
+        // Validate each item in the submitted chekiList
+        for (const item of chekiList) {
+          const mid = item.member_id || item.id;
+          if (mid && memberQuotas[mid] !== undefined && memberQuotas[mid] !== null && memberQuotas[mid] !== "") {
+            const quota = Number(memberQuotas[mid]);
+            if (quota > 0) {
+              const currentCount = memberOrdered[mid] || 0;
+              if (currentCount + item.quantity > quota) {
+                const remaining = Math.max(0, quota - currentCount);
+                return res.status(400).json({ 
+                  error: `Stok Cheki untuk member ${item.member_name} tidak mencukupi. Tersisa ${remaining} lembar.` 
+                });
+              }
+            }
+          }
+        }
+      }
     }
 
     if (totalChekiCount > 50) {
@@ -771,11 +818,52 @@ app.get('/api/orders/event-cheki-status', async (req, res) => {
       });
     }
 
+    // 3. Fetch member-level quotas
+    const { data: memberQuotaSetting } = await supabase
+      .from('shop_settings')
+      .select('value')
+      .eq('key', 'event_member_cheki_quotas')
+      .single();
+    const allMemberQuotas = memberQuotaSetting?.value || {};
+    const memberQuotas = allMemberQuotas[event_name] || {};
+
+    // 4. Calculate member-level ordered count
+    const memberOrdered = {};
+    if (eventOrders) {
+      eventOrders.forEach(o => {
+        let items = [];
+        try {
+          items = typeof o.cheki_items === 'string' ? JSON.parse(o.cheki_items) : o.cheki_items;
+        } catch(e) {}
+        if (Array.isArray(items)) {
+          items.forEach(item => {
+            const mid = item.member_id || item.id;
+            if (mid) {
+              memberOrdered[mid] = (memberOrdered[mid] || 0) + (item.quantity || 0);
+            }
+          });
+        }
+      });
+    }
+
+    // 5. Compute member-level remaining quotas
+    const memberRemaining = {};
+    Object.keys(memberQuotas).forEach(mid => {
+      const q = parseInt(memberQuotas[mid], 10);
+      if (!isNaN(q)) {
+        const ordered = memberOrdered[mid] || 0;
+        memberRemaining[mid] = Math.max(0, q - ordered);
+      }
+    });
+
     res.json({
       event_name,
       quota,
       ordered: currentChekiCount,
-      remaining: quota !== null ? Math.max(0, quota - currentChekiCount) : null
+      remaining: quota !== null ? Math.max(0, quota - currentChekiCount) : null,
+      member_quotas,
+      member_ordered: memberOrdered,
+      member_remaining: memberRemaining
     });
   } catch (err) {
     console.error("Error event-cheki-status:", err);
@@ -819,6 +907,24 @@ app.get('/api/settings', async (req, res) => {
     if (!settings.merch_stock_overrides) {
       settings.merch_stock_overrides = {};
     }
+    if (!settings.event_member_cheki_quotas) {
+      settings.event_member_cheki_quotas = {};
+    }
+    if (settings.payment_qris_name === undefined) {
+      settings.payment_qris_name = '';
+    }
+    if (settings.payment_qris_image === undefined) {
+      settings.payment_qris_image = '';
+    }
+    if (settings.payment_bank_name === undefined) {
+      settings.payment_bank_name = '';
+    }
+    if (settings.payment_bank_account_number === undefined) {
+      settings.payment_bank_account_number = '';
+    }
+    if (settings.payment_bank_account_name === undefined) {
+      settings.payment_bank_account_name = '';
+    }
 
     res.json(settings);
   } catch (err) {
@@ -829,7 +935,13 @@ app.get('/api/settings', async (req, res) => {
       cheki_po_open: true,
       merch_po_open: true,
       event_cheki_quotas: {},
-      merch_stock_overrides: {}
+      merch_stock_overrides: {},
+      event_member_cheki_quotas: {},
+      payment_qris_name: '',
+      payment_qris_image: '',
+      payment_bank_name: '',
+      payment_bank_account_number: '',
+      payment_bank_account_name: ''
     });
   }
 });
@@ -886,6 +998,54 @@ app.put('/api/settings', adminAuth, async (req, res) => {
         supabase
           .from('shop_settings')
           .upsert({ key: 'merch_stock_overrides', value: merch_stock_overrides })
+      );
+    }
+
+    if (req.body.event_member_cheki_quotas !== undefined) {
+      promises.push(
+        supabase
+          .from('shop_settings')
+          .upsert({ key: 'event_member_cheki_quotas', value: req.body.event_member_cheki_quotas })
+      );
+    }
+
+    if (req.body.payment_qris_name !== undefined) {
+      promises.push(
+        supabase
+          .from('shop_settings')
+          .upsert({ key: 'payment_qris_name', value: req.body.payment_qris_name })
+      );
+    }
+
+    if (req.body.payment_qris_image !== undefined) {
+      promises.push(
+        supabase
+          .from('shop_settings')
+          .upsert({ key: 'payment_qris_image', value: req.body.payment_qris_image })
+      );
+    }
+
+    if (req.body.payment_bank_name !== undefined) {
+      promises.push(
+        supabase
+          .from('shop_settings')
+          .upsert({ key: 'payment_bank_name', value: req.body.payment_bank_name })
+      );
+    }
+
+    if (req.body.payment_bank_account_number !== undefined) {
+      promises.push(
+        supabase
+          .from('shop_settings')
+          .upsert({ key: 'payment_bank_account_number', value: req.body.payment_bank_account_number })
+      );
+    }
+
+    if (req.body.payment_bank_account_name !== undefined) {
+      promises.push(
+        supabase
+          .from('shop_settings')
+          .upsert({ key: 'payment_bank_account_name', value: req.body.payment_bank_account_name })
       );
     }
 

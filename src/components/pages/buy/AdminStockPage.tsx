@@ -16,10 +16,13 @@ export function AdminStockPage() {
   // Content data
   const [events, setEvents] = useState<any[]>([]);
   const [merch, setMerch] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
 
   // Settings states
   const [eventQuotas, setEventQuotas] = useState<Record<string, number | string>>({});
   const [stockOverrides, setStockOverrides] = useState<Record<string, number | string>>({});
+  const [memberQuotas, setMemberQuotas] = useState<Record<string, Record<string, number | string>>>({});
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   // Verify admin session on mount (24h revocation)
   useEffect(() => {
@@ -65,12 +68,13 @@ export function AdminStockPage() {
       try {
         // 1. Fetch settings
         const settingsRes = await fetch('/api/settings');
-        let settings = { event_cheki_quotas: {}, merch_stock_overrides: {} };
+        let settings = { event_cheki_quotas: {}, merch_stock_overrides: {}, event_member_cheki_quotas: {} };
         if (settingsRes.ok) {
           settings = await settingsRes.json();
         }
         setEventQuotas(settings.event_cheki_quotas || {});
         setStockOverrides(settings.merch_stock_overrides || {});
+        setMemberQuotas(settings.event_member_cheki_quotas || {});
 
         // 2. Fetch Contentful data (Events & Products)
         try {
@@ -105,6 +109,21 @@ export function AdminStockPage() {
           };
           setEvents([defaultEv, ...formattedEvents]);
 
+          // Members
+          const membersResponse = await client.getEntries({
+            content_type: 'member',
+            order: ['fields.name'],
+          });
+          const formattedMembers = membersResponse.items.map((item: any) => ({
+            id: item.sys.id,
+            name: item.fields.name || 'Untitled Member'
+          }));
+          if (formattedMembers.length > 0) {
+            setMembers(formattedMembers);
+          } else {
+            setMembers(buyConfig.members);
+          }
+
           // Products
           const productsResponse = await client.getEntries({
             content_type: 'product',
@@ -135,6 +154,7 @@ export function AdminStockPage() {
           };
           setEvents([defaultEv]);
           setMerch(buyConfig.merch);
+          setMembers(buyConfig.members);
         }
       } catch (err) {
         console.error("Error loading stock overrides page:", err);
@@ -159,7 +179,8 @@ export function AdminStockPage() {
         },
         body: JSON.stringify({
           event_cheki_quotas: eventQuotas,
-          merch_stock_overrides: stockOverrides
+          merch_stock_overrides: stockOverrides,
+          event_member_cheki_quotas: memberQuotas
         })
       });
 
@@ -190,6 +211,21 @@ export function AdminStockPage() {
       ...prev,
       [merchId]: value === '' ? '' : parseInt(value, 10) || 0
     }));
+  };
+
+  const handleMemberQuotaChange = (eventTitle: string, memberId: string, value: string) => {
+    setMemberQuotas(prev => {
+      const eventQuota = { ...(prev[eventTitle] || {}) };
+      if (value === '') {
+        delete eventQuota[memberId];
+      } else {
+        eventQuota[memberId] = parseInt(value, 10) || 0;
+      }
+      return {
+        ...prev,
+        [eventTitle]: eventQuota
+      };
+    });
   };
 
   if (isLoading) {
@@ -284,28 +320,62 @@ export function AdminStockPage() {
                     return (
                       <div 
                         key={ev.id}
-                        className="p-4 rounded-xl border border-white/5 bg-white/2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                        className="p-4 rounded-xl border border-white/5 bg-white/2 flex flex-col gap-4"
                       >
-                        <div className="min-w-0 flex-1">
-                          <h4 className="font-bold text-sm text-white" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                            {ev.title}
-                          </h4>
-                          <p className="text-xs text-white/40 mt-0.5 leading-relaxed">
-                            📅 {ev.date}
-                          </p>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-bold text-sm text-white" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                              {ev.title}
+                            </h4>
+                            <p className="text-xs text-white/40 mt-0.5 leading-relaxed">
+                              📅 {ev.date}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedEventId(expandedEventId === ev.id ? null : ev.id)}
+                              className="text-xs text-[#90CDF4] hover:text-white font-bold underline cursor-pointer mt-2 block text-left"
+                              style={{ fontFamily: 'Montserrat, sans-serif' }}
+                            >
+                              {expandedEventId === ev.id ? 'Sembunyikan Kuota per Member' : 'Atur Kuota per Member'}
+                            </button>
+                          </div>
+
+                          <div className="flex-shrink-0 flex items-center gap-3">
+                            <span className="text-xs text-white/50 font-bold">Kuota Event Total:</span>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="Unlimited"
+                              value={value}
+                              onChange={(e) => handleQuotaChange(ev.title, e.target.value)}
+                              className="w-32 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-center font-bold outline-none focus:border-[#90CDF4] text-sm"
+                            />
+                          </div>
                         </div>
 
-                        <div className="flex-shrink-0 flex items-center gap-3">
-                          <span className="text-xs text-white/50 font-bold">Kuota Cheki:</span>
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="Unlimited"
-                            value={value}
-                            onChange={(e) => handleQuotaChange(ev.title, e.target.value)}
-                            className="w-32 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-center font-bold outline-none focus:border-[#90CDF4] text-sm"
-                          />
-                        </div>
+                        {expandedEventId === ev.id && (
+                          <div className="mt-2 pl-4 border-l-2 border-[#90CDF4]/30 space-y-3 pt-2">
+                            <p className="text-[11px] text-white/40 font-bold uppercase tracking-wide">Kuota Cheki Per Member (Event ini):</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {members.map((m) => {
+                                const mQuota = memberQuotas[ev.title]?.[m.id] !== undefined ? memberQuotas[ev.title][m.id] : '';
+                                return (
+                                  <div key={m.id} className="flex items-center justify-between gap-3 bg-black/20 p-2.5 rounded-lg border border-white/5">
+                                    <span className="text-xs font-bold text-white/80">{m.name}</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      placeholder="Unlimited"
+                                      value={mQuota}
+                                      onChange={(e) => handleMemberQuotaChange(ev.title, m.id, e.target.value)}
+                                      className="w-24 px-2 py-1 rounded bg-black/40 border border-white/10 text-white text-center font-bold outline-none focus:border-[#90CDF4] text-xs"
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

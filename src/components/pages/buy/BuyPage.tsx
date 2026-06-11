@@ -176,7 +176,11 @@ export function BuyPage() {
             date: dateStr,
             venue: item.fields.venue || 'TBA',
             location: item.fields.address || '',
-            rawDate
+            rawDate,
+            attendingMembers: item.fields.attendingMembers?.map((m: any) => ({
+              id: m.sys.id,
+              name: m.fields.name || ''
+            })) || null
           };
         });
 
@@ -221,10 +225,15 @@ export function BuyPage() {
                 m.name.toLowerCase() === preselectedMember.toLowerCase() ||
                 m.id === preselectedMember
               );
-              if (!next[m.id]) {
-                next[m.id] = { type: 'Two Shot', quantity: isPreselected ? 1 : 0 };
+              const soloKey = `${m.id}_Solo`;
+              const twoShotKey = `${m.id}_Two Shot`;
+              if (!next[soloKey]) {
+                next[soloKey] = { type: 'Solo', quantity: 0 };
+              }
+              if (!next[twoShotKey]) {
+                next[twoShotKey] = { type: 'Two Shot', quantity: isPreselected ? 1 : 0 };
               } else if (isPreselected) {
-                next[m.id].quantity = 1;
+                next[twoShotKey].quantity = 1;
               }
             });
             if (!next['group_shot']) {
@@ -296,10 +305,11 @@ export function BuyPage() {
   // Cheki quantities and types
   // Structured as: { [memberId]: { type: 'Two Shot' | 'Solo' | 'Group', quantity: number } }
   const [chekiOrders, setChekiOrders] = useState<Record<string, { type: string; quantity: number }>>(() => {
-    const initial = buyConfig.members.reduce((acc, m) => {
-      acc[m.id] = { type: 'Two Shot', quantity: 0 };
-      return acc;
-    }, {} as any);
+    const initial = {} as Record<string, { type: string; quantity: number }>;
+    buyConfig.members.forEach(m => {
+      initial[`${m.id}_Solo`] = { type: 'Solo', quantity: 0 };
+      initial[`${m.id}_Two Shot`] = { type: 'Two Shot', quantity: 0 };
+    });
     initial['group_shot'] = { type: 'Group', quantity: 0 };
     return initial;
   });
@@ -372,6 +382,30 @@ export function BuyPage() {
     };
   }, [proofPreview]);
 
+  // Reset orders for members not attending when event changes
+  useEffect(() => {
+    if (!selectedEvent) return;
+    const selectedEventObj = events.find(ev => ev.title === selectedEvent);
+    const attendingLineup = selectedEventObj?.attendingMembers;
+    if (attendingLineup && attendingLineup.length > 0) {
+      setChekiOrders(prev => {
+        const next = { ...prev };
+        let changed = false;
+        Object.keys(next).forEach(key => {
+          if (key === 'group_shot') return;
+          const lastUnderscore = key.lastIndexOf('_');
+          const memberId = key.substring(0, lastUnderscore);
+          const isAttending = attendingLineup.some((am: any) => am.id === memberId);
+          if (!isAttending && next[key]?.quantity > 0) {
+            next[key] = { ...next[key], quantity: 0 };
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, [selectedEvent, events]);
+
   // 2. Identity validations
   const validateField = (field: string, value: string) => {
     let error = '';
@@ -428,39 +462,44 @@ export function BuyPage() {
 
   // Instagram change strip @
   const handleInstagramChange = (val: string) => {
-    const stripped = val.replace(/^@/, '');
-    setInsta(stripped);
-    if (touched['instagram']) {
-      validateField('instagram', stripped);
-    }
+    setInsta(val);
+    if (touched['instagram']) validateField('instagram', val);
   };
 
   // Cheki handlers
-  const handleChekiTypeChange = (memberId: string, type: string) => {
+  const handleChekiQtyChange = (key: string, qty: number) => {
+    const parsed = Math.max(0, qty);
     setChekiOrders(prev => {
-      const current = prev[memberId] || { type: 'Two Shot', quantity: 0 };
-      return {
-        ...prev,
-        [memberId]: { ...current, type }
-      };
+      const next = { ...prev };
+      if (!next[key]) {
+        const type = key.endsWith('_Solo') ? 'Solo' : (key.endsWith('_Two Shot') ? 'Two Shot' : 'Group');
+        next[key] = { type, quantity: parsed };
+      } else {
+        next[key] = { ...next[key], quantity: parsed };
+      }
+      return next;
     });
   };
 
-  const handleChekiQtyChange = (memberId: string, qty: number) => {
-    const clamped = Math.max(0, Math.min(50, qty));
-    setChekiOrders(prev => {
-      const defaultType = memberId === 'group_shot' ? 'Group' : 'Two Shot';
-      const current = prev[memberId] || { type: defaultType, quantity: 0 };
-      return {
-        ...prev,
-        [memberId]: { ...current, quantity: clamped }
-      };
-    });
-  };
-
-  const handleChekiDirectInput = (memberId: string, inputVal: string) => {
+  const handleChekiDirectInput = (key: string, inputVal: string) => {
     const parsed = parseInt(inputVal.replace(/\D/g, ''), 10) || 0;
-    handleChekiQtyChange(memberId, parsed);
+    if (key === 'group_shot') {
+      handleChekiQtyChange(key, parsed);
+    } else {
+      const lastUnderscore = key.lastIndexOf('_');
+      const memberId = key.substring(0, lastUnderscore);
+      const remainingStock = eventChekiStatus?.member_remaining?.[memberId];
+      let finalQty = parsed;
+      if (remainingStock !== undefined && remainingStock !== null) {
+        const otherType = key.endsWith('_Solo') ? 'Two Shot' : 'Solo';
+        const otherKey = `${memberId}_${otherType}`;
+        const otherQty = chekiOrders[otherKey]?.quantity || 0;
+        if (finalQty + otherQty > remainingStock) {
+          finalQty = Math.max(0, remainingStock - otherQty);
+        }
+      }
+      handleChekiQtyChange(key, finalQty);
+    }
   };
 
   // Merch handlers
@@ -487,28 +526,33 @@ export function BuyPage() {
 
   let totalChekiQty = 0;
   let chekiGrandTotal = 0;
-  const activeChekiList = members
-    .filter(m => m.isActive)
-    .map(m => {
-      const order = chekiOrders[m.id];
-      const quantity = order ? order.quantity : 0;
-      const type = order ? order.type : 'Two Shot';
-      const price = getChekiPrice(type);
-      const subtotal = quantity * price;
-      
-      totalChekiQty += quantity;
-      chekiGrandTotal += subtotal;
+  const activeChekiList: any[] = [];
 
-      return {
-        id: m.id,
-        name: m.name,
-        type,
-        quantity,
-        price,
-        subtotal
-      };
-    })
-    .filter(item => item.quantity > 0);
+  members
+    .filter(m => m.isActive)
+    .forEach(m => {
+      ['Solo', 'Two Shot'].forEach(type => {
+        const key = `${m.id}_${type}`;
+        const order = chekiOrders[key];
+        const quantity = order ? order.quantity : 0;
+        if (quantity > 0) {
+          const price = getChekiPrice(type);
+          const subtotal = quantity * price;
+          
+          totalChekiQty += quantity;
+          chekiGrandTotal += subtotal;
+
+          activeChekiList.push({
+            id: m.id,
+            name: m.name,
+            type,
+            quantity,
+            price,
+            subtotal
+          });
+        }
+      });
+    });
 
   // Consolidated Group Shot active cheki compilation
   const groupOrder = chekiOrders['group_shot'];
@@ -1025,7 +1069,89 @@ export function BuyPage() {
               </div>
             </div>
 
-            {/* SECTION 2: CHEKI ORDER */}
+            {/* SECTION 2: PILIH EVENT UTAMA */}
+            <div className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm">
+              <h2 className="text-2xl font-black text-[#90CDF4] mb-6 flex items-center gap-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                <Calendar className="w-6 h-6" /> 2. PILIH EVENT UTAMA
+              </h2>
+
+              <p className="text-xs text-white/60 mb-6" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                Pilih event target yang Anda tuju untuk pesanan Cheki ini.
+              </p>
+
+              {events.length === 1 ? (
+                <div className="p-5 rounded-xl border-2 border-[#90CDF4] bg-[#90CDF4]/5 flex items-start gap-4 shadow-lg shadow-[#90CDF4]/5">
+                  <div className="mt-1">
+                    <div className="w-5 h-5 rounded-full border-2 border-[#90CDF4] bg-[#90CDF4] flex items-center justify-center">
+                      <Check className="w-3.5 h-3.5 text-[#1a2f47] stroke-[3]" />
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-black text-white" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      {events[0].title}
+                    </h3>
+                    <p className="text-xs text-white/50 mt-1 leading-relaxed" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      📅 {events[0].date} <br />
+                      📍 {events[0].venue} {events[0].location ? `(${events[0].location})` : ''}
+                    </p>
+                    <span className="inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 mt-3 rounded bg-[#90CDF4]/20 border border-[#90CDF4]/30 text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      Event Attending Terjadwal
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {events.map(ev => {
+                    const isSelected = selectedEvent === ev.title;
+                    return (
+                      <div
+                        key={ev.id}
+                        onClick={() => setSelectedEvent(ev.title)}
+                        className={`p-5 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-4 ${
+                          isSelected
+                            ? 'border-[#90CDF4] bg-[#90CDF4]/5 shadow-lg shadow-[#90CDF4]/5'
+                            : 'border-white/5 bg-white/2 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="mt-1">
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            isSelected ? 'border-[#90CDF4] bg-[#90CDF4]' : 'border-white/30'
+                          }`}>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-[#1a2f47] stroke-[3]" />}
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm md:text-base font-black text-white truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                            {ev.title}
+                          </h3>
+                          <p className="text-[11px] text-white/50 mt-1 leading-relaxed">
+                            📅 {ev.date} <br />
+                            📍 {ev.venue}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {eventChekiStatus && eventChekiStatus.quota !== null && (
+                <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/10 text-xs flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${isEventChekiQuotaExceeded ? 'bg-red-400 animate-pulse' : 'bg-emerald-400'}`} />
+                    <span className="text-white/60 font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>Kuota Pemesanan Cheki Event:</span>
+                  </div>
+                  <span className={`font-black ${isEventChekiQuotaExceeded ? 'text-red-400 bg-red-950/20 px-2 py-0.5 border border-red-500/30 rounded font-bold' : 'text-[#F6E05E]'}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    {isEventChekiQuotaExceeded 
+                      ? 'KUOTA PENUH' 
+                      : `${eventChekiStatus.ordered} / ${eventChekiStatus.quota} lembar terisi (Sisa ${eventChekiStatus.remaining} lembar)`
+                    }
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* SECTION 3: PESANAN CHEKI */}
             <div 
               ref={itemsRef} 
               id="section-items" 
@@ -1033,7 +1159,7 @@ export function BuyPage() {
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <h2 className="text-2xl font-black text-[#90CDF4] flex items-center gap-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                  <ShoppingBag className="w-6 h-6" /> 2. PESANAN CHEKI
+                  <ShoppingBag className="w-6 h-6" /> 3. PESANAN CHEKI
                 </h2>
                 <span className="text-xs font-bold px-3 py-1.5 rounded-md bg-[#90CDF4]/15 border border-[#90CDF4]/30 text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                   Batas Maks. 50 Lembar
@@ -1069,13 +1195,29 @@ export function BuyPage() {
 
               {/* Members Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {members
-                  .filter(m => m.isActive)
-                  .map(member => {
-                    const order = chekiOrders[member.id] || { type: 'Two Shot', quantity: 0 };
-                    const hasSelected = order.quantity > 0;
-                    const price = getChekiPrice(order.type);
-                    const subtotal = order.quantity * price;
+                {(() => {
+                  const selectedEventObj = events.find(ev => ev.title === selectedEvent);
+                  const attendingLineup = selectedEventObj?.attendingMembers;
+                  const displayedMembers = members.filter(m => {
+                    if (!m.isActive) return false;
+                    if (attendingLineup && attendingLineup.length > 0) {
+                      return attendingLineup.some((am: any) => am.id === m.id);
+                    }
+                    return true;
+                  });
+
+                  return displayedMembers.map(member => {
+                    const soloOrder = chekiOrders[`${member.id}_Solo`] || { type: 'Solo', quantity: 0 };
+                    const twoShotOrder = chekiOrders[`${member.id}_Two Shot`] || { type: 'Two Shot', quantity: 0 };
+                    const hasSelected = soloOrder.quantity > 0 || twoShotOrder.quantity > 0;
+                    
+                    const priceSolo = chekiPrices.solo;
+                    const priceTwoShot = chekiPrices.twoShot;
+                    const subtotal = (soloOrder.quantity * priceSolo) + (twoShotOrder.quantity * priceTwoShot);
+                    
+                    const remainingStock = eventChekiStatus?.member_remaining?.[member.id];
+                    const totalSelectedQtyForMember = soloOrder.quantity + twoShotOrder.quantity;
+                    const isMemberOutOfStock = remainingStock !== undefined && remainingStock !== null && remainingStock <= 0;
 
                     return (
                       <div
@@ -1083,100 +1225,147 @@ export function BuyPage() {
                         className={`p-5 rounded-xl border-2 transition-all flex flex-col justify-between ${
                           hasSelected 
                             ? 'border-[#90CDF4] bg-[#90CDF4]/5 shadow-lg shadow-[#90CDF4]/5' 
-                            : 'border-white/5 bg-white/2 animate-pulse-none hover:border-white/20'
+                            : 'border-white/5 bg-white/2 hover:border-white/20'
                         }`}
                       >
-                        <div className="flex gap-4">
-                          {/* Member Image */}
-                          <div className="w-16 h-16 rounded-full overflow-hidden border border-white/20 bg-[#1a2f47] flex-shrink-0">
-                            <img
-                              src={member.photoUrl || "https://via.placeholder.com/150/90CDF4/1a2f47?text=" + member.name}
-                              alt={member.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          
-                          {/* Member details & select type */}
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-lg font-black text-white" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                              {member.name}
-                            </h3>
+                        <div>
+                          <div className="flex gap-4">
+                            {/* Member Image */}
+                            <div className="w-16 h-16 rounded-full overflow-hidden border border-white/20 bg-[#1a2f47] flex-shrink-0">
+                              <img
+                                src={member.photoUrl || "https://via.placeholder.com/150/90CDF4/1a2f47?text=" + member.name}
+                                alt={member.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
                             
-                            {/* Segmented type tab selection (Two Shot / Solo only) */}
-                            <div className="flex mt-3 rounded-lg border border-white/10 overflow-hidden bg-black/20 p-0.5">
-                              {['Two Shot', 'Solo'].map(type => (
+                            {/* Member details & stock badge */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="text-lg font-black text-white" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                  {member.name}
+                                </h3>
+                                {selectedEvent && remainingStock !== undefined && remainingStock !== null && (
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                    isMemberOutOfStock
+                                      ? 'bg-red-500/10 border border-red-500/30 text-red-400 animate-pulse'
+                                      : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                                  }`}>
+                                    {isMemberOutOfStock ? 'Stok Habis' : `Sisa ${remainingStock}x`}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-white/40 uppercase tracking-widest mt-1" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                Member
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* COUNTERS FOR SOLO AND REGULER */}
+                          <div className="mt-5 space-y-4 pt-4 border-t border-white/5">
+                            {/* Row 1: Solo */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/10 p-3 rounded-lg border border-white/5">
+                              <div>
+                                <span className="text-xs font-black text-white block" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                  Solo ({formatRpString(priceSolo)})
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-3">
                                 <button
-                                  key={type}
                                   type="button"
-                                  onClick={() => handleChekiTypeChange(member.id, type)}
-                                  className={`flex-1 text-[10px] font-black py-1.5 transition-colors rounded ${
-                                    order.type === type
-                                      ? 'bg-[#90CDF4] text-[#1a2f47]'
-                                      : 'text-white/60 hover:text-white hover:bg-white/5'
-                                  }`}
-                                  style={{ fontFamily: 'Montserrat, sans-serif' }}
+                                  onClick={() => handleChekiQtyChange(`${member.id}_Solo`, soloOrder.quantity - 1)}
+                                  disabled={soloOrder.quantity <= 0 || !isChekiAvailable || isEventChekiQuotaExceeded}
+                                  className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold cursor-pointer"
                                 >
-                                  {type.toUpperCase()}
+                                  <span className="text-lg font-bold">-</span>
                                 </button>
-                              ))}
+
+                                <input
+                                  type="text"
+                                  value={soloOrder.quantity === 0 ? '' : soloOrder.quantity}
+                                  onChange={e => handleChekiDirectInput(`${member.id}_Solo`, e.target.value)}
+                                  disabled={!isChekiAvailable || isEventChekiQuotaExceeded || isMemberOutOfStock}
+                                  placeholder="0"
+                                  className="w-10 text-center font-black bg-black/30 border border-white/10 rounded-lg py-1 text-sm outline-none focus:border-[#90CDF4] disabled:opacity-30"
+                                  style={{ fontFamily: 'Montserrat, sans-serif' }}
+                                />
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleChekiQtyChange(`${member.id}_Solo`, soloOrder.quantity + 1)}
+                                  disabled={
+                                    soloOrder.quantity >= 50 || 
+                                    !isChekiAvailable || 
+                                    isEventChekiQuotaExceeded ||
+                                    isMemberOutOfStock ||
+                                    (remainingStock !== undefined && remainingStock !== null && totalSelectedQtyForMember >= remainingStock)
+                                  }
+                                  className="w-8 h-8 rounded-lg bg-white/5 hover:bg-[#90CDF4]/20 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold cursor-pointer"
+                                >
+                                  <span className="text-lg font-bold text-[#90CDF4]">+</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Row 2: Reguler (Two Shot) */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/10 p-3 rounded-lg border border-white/5">
+                              <div>
+                                <span className="text-xs font-black text-white block" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                  Reguler ({formatRpString(priceTwoShot)})
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => handleChekiQtyChange(`${member.id}_Two Shot`, twoShotOrder.quantity - 1)}
+                                  disabled={twoShotOrder.quantity <= 0 || !isChekiAvailable || isEventChekiQuotaExceeded}
+                                  className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold cursor-pointer"
+                                >
+                                  <span className="text-lg font-bold">-</span>
+                                </button>
+
+                                <input
+                                  type="text"
+                                  value={twoShotOrder.quantity === 0 ? '' : twoShotOrder.quantity}
+                                  onChange={e => handleChekiDirectInput(`${member.id}_Two Shot`, e.target.value)}
+                                  disabled={!isChekiAvailable || isEventChekiQuotaExceeded || isMemberOutOfStock}
+                                  placeholder="0"
+                                  className="w-10 text-center font-black bg-black/30 border border-white/10 rounded-lg py-1 text-sm outline-none focus:border-[#90CDF4] disabled:opacity-30"
+                                  style={{ fontFamily: 'Montserrat, sans-serif' }}
+                                />
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleChekiQtyChange(`${member.id}_Two Shot`, twoShotOrder.quantity + 1)}
+                                  disabled={
+                                    twoShotOrder.quantity >= 50 || 
+                                    !isChekiAvailable || 
+                                    isEventChekiQuotaExceeded ||
+                                    isMemberOutOfStock ||
+                                    (remainingStock !== undefined && remainingStock !== null && totalSelectedQtyForMember >= remainingStock)
+                                  }
+                                  className="w-8 h-8 rounded-lg bg-white/5 hover:bg-[#90CDF4]/20 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold cursor-pointer"
+                                >
+                                  <span className="text-lg font-bold text-[#90CDF4]">+</span>
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
 
-                        {/* Quantity Counter & Subtotal */}
-                        <div className="flex items-center justify-between gap-4 mt-6 pt-4 border-t border-white/5">
-                          <div>
-                            <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                              Harga Satuan
-                            </p>
-                            <p className="text-sm font-black text-[#F6E05E]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                              {formatRpString(price)}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            {/* Qty minus */}
-                            <button
-                              type="button"
-                              onClick={() => handleChekiQtyChange(member.id, order.quantity - 1)}
-                              disabled={order.quantity <= 0 || !isChekiAvailable || isEventChekiQuotaExceeded}
-                              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold"
-                            >
-                              <span className="text-lg font-bold">-</span>
-                            </button>
-
-                            <input
-                              type="text"
-                              value={order.quantity === 0 ? '' : order.quantity}
-                              onChange={e => handleChekiDirectInput(member.id, e.target.value)}
-                              disabled={!isChekiAvailable || isEventChekiQuotaExceeded}
-                              placeholder="0"
-                              className="w-10 text-center font-black bg-black/30 border border-white/10 rounded-lg py-1 text-sm outline-none focus:border-[#90CDF4] disabled:opacity-30"
-                              style={{ fontFamily: 'Montserrat, sans-serif' }}
-                            />
-
-                            {/* Qty plus */}
-                            <button
-                              type="button"
-                              onClick={() => handleChekiQtyChange(member.id, order.quantity + 1)}
-                              disabled={order.quantity >= 50 || !isChekiAvailable || isEventChekiQuotaExceeded}
-                              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold"
-                            >
-                              <span className="text-lg font-bold">+</span>
-                            </button>
-                          </div>
-                        </div>
-
                         {/* Card subtotal display */}
-                        <div className="flex justify-between items-center mt-3 pt-2 text-xs">
+                        <div className="flex justify-between items-center mt-4 pt-3 border-t border-white/5 text-xs">
                           <span className="text-white/40">Subtotal:</span>
-                          <span className={`font-bold ${hasSelected ? 'text-white' : 'text-white/30'}`}>
+                          <span className={`font-bold ${hasSelected ? 'text-white font-black' : 'text-white/30'}`}>
                             {formatRpString(subtotal)}
                           </span>
                         </div>
                       </div>
                     );
-                  })}
+                  });
+                })()}
 
                 {/* Consolidated Group Shot Card */}
                 {(() => {
@@ -1232,7 +1421,7 @@ export function BuyPage() {
                             type="button"
                             onClick={() => handleChekiQtyChange('group_shot', order.quantity - 1)}
                             disabled={order.quantity <= 0 || !isChekiAvailable || isEventChekiQuotaExceeded}
-                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold"
+                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold cursor-pointer"
                           >
                             <span className="text-lg font-bold">-</span>
                           </button>
@@ -1252,7 +1441,7 @@ export function BuyPage() {
                             type="button"
                             onClick={() => handleChekiQtyChange('group_shot', order.quantity + 1)}
                             disabled={order.quantity >= 50 || !isChekiAvailable || isEventChekiQuotaExceeded}
-                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold"
+                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold cursor-pointer"
                           >
                             <span className="text-lg font-bold">+</span>
                           </button>
@@ -1400,87 +1589,7 @@ export function BuyPage() {
               </div>
             </div>
 
-            {/* SECTION 4: PILIH EVENT UTAMA */}
-            <div className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm">
-              <h2 className="text-2xl font-black text-[#90CDF4] mb-6 flex items-center gap-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                <Calendar className="w-6 h-6" /> 4. PILIH EVENT UTAMA
-              </h2>
 
-              <p className="text-xs text-white/60 mb-6" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                Pilih event target yang Anda tuju untuk pesanan Cheki ini.
-              </p>
-
-              {events.length === 1 ? (
-                <div className="p-5 rounded-xl border-2 border-[#90CDF4] bg-[#90CDF4]/5 flex items-start gap-4 shadow-lg shadow-[#90CDF4]/5">
-                  <div className="mt-1">
-                    <div className="w-5 h-5 rounded-full border-2 border-[#90CDF4] bg-[#90CDF4] flex items-center justify-center">
-                      <Check className="w-3.5 h-3.5 text-[#1a2f47] stroke-[3]" />
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-black text-white" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                      {events[0].title}
-                    </h3>
-                    <p className="text-xs text-white/50 mt-1 leading-relaxed" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                      📅 {events[0].date} <br />
-                      📍 {events[0].venue} {events[0].location ? `(${events[0].location})` : ''}
-                    </p>
-                    <span className="inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 mt-3 rounded bg-[#90CDF4]/20 border border-[#90CDF4]/30 text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                      Event Aktif Terjadwal
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {events.map(ev => {
-                    const isSelected = selectedEvent === ev.title;
-                    return (
-                      <div
-                        key={ev.id}
-                        onClick={() => setSelectedEvent(ev.title)}
-                        className={`p-5 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-4 ${
-                          isSelected
-                            ? 'border-[#90CDF4] bg-[#90CDF4]/5 shadow-lg shadow-[#90CDF4]/5'
-                            : 'border-white/5 bg-white/2 hover:border-white/20'
-                        }`}
-                      >
-                        <div className="mt-1">
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            isSelected ? 'border-[#90CDF4] bg-[#90CDF4]' : 'border-white/30'
-                          }`}>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-[#1a2f47] stroke-[3]" />}
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm md:text-base font-black text-white truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                            {ev.title}
-                          </h3>
-                          <p className="text-[11px] text-white/50 mt-1 leading-relaxed">
-                            📅 {ev.date} <br />
-                            📍 {ev.venue}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {eventChekiStatus && eventChekiStatus.quota !== null && (
-                <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/10 text-xs flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${isEventChekiQuotaExceeded ? 'bg-red-400 animate-pulse' : 'bg-emerald-400'}`} />
-                    <span className="text-white/60 font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>Kuota Pemesanan Cheki Event:</span>
-                  </div>
-                  <span className={`font-black ${isEventChekiQuotaExceeded ? 'text-red-400 bg-red-950/20 px-2 py-0.5 border border-red-500/30 rounded font-bold' : 'text-[#F6E05E]'}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                    {isEventChekiQuotaExceeded 
-                      ? 'KUOTA PENUH' 
-                      : `${eventChekiStatus.ordered} / ${eventChekiStatus.quota} lembar terisi (Sisa ${eventChekiStatus.remaining} lembar)`
-                    }
-                  </span>
-                </div>
-              )}
-            </div>
 
             {/* SECTION 5: REDEEM METHOD & NOTES */}
             <div className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm">
@@ -1586,14 +1695,14 @@ export function BuyPage() {
               </div>
             </div>
 
-            {/* SECTION 7: PAYMENT */}
+            {/* SECTION 6: PAYMENT */}
             <div 
               ref={paymentRef} 
               id="section-payment" 
               className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/50 backdrop-blur-sm"
             >
               <h2 className="text-2xl font-black text-[#90CDF4] mb-6 flex items-center gap-3" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                <Gift className="w-6 h-6" /> 5. METODE PEMBAYARAN &amp; VERIFIKASI
+                <Gift className="w-6 h-6" /> 6. METODE PEMBAYARAN &amp; VERIFIKASI
               </h2>
 
               <p className="text-xs text-white/60 mb-6" style={{ fontFamily: 'Montserrat, sans-serif' }}>
@@ -1601,8 +1710,11 @@ export function BuyPage() {
               </p>
 
               {/* Payment Methods selector */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                {buyConfig.paymentMethods.map(method => (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {[
+                  { id: 'qris', label: 'QRIS' },
+                  { id: 'bank_transfer', label: 'Transfer Bank' + (shopSettings.payment_bank_name ? ` (${shopSettings.payment_bank_name})` : '') }
+                ].map(method => (
                   <div
                     key={method.id}
                     onClick={() => setSelectedPayment(method.id)}
@@ -1628,50 +1740,61 @@ export function BuyPage() {
               {selectedPayment && (
                 <div className="p-6 rounded-xl bg-black/40 border border-white/10 mb-8 animate-fadeIn">
                   {(() => {
-                    const method = buyConfig.paymentMethods.find(m => m.id === selectedPayment);
-                    if (!method) return null;
-
-                    if (method.type === 'qris') {
+                    if (selectedPayment === 'qris') {
+                      const qrisName = shopSettings.payment_qris_name || buyConfig.paymentMethods.find(m => m.id === 'qris')?.accountName || 'Kirin Day Management';
+                      const qrisImage = shopSettings.payment_qris_image || buyConfig.paymentMethods.find(m => m.id === 'qris')?.qrImageUrl || '';
+                      
                       return (
                         <div className="flex flex-col items-center">
                           <p className="text-xs text-[#90CDF4] font-bold mb-4" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                             PINDAI KODE QRIS BERIKUT UNTUK MEMBAYAR
                           </p>
-                          <div className="p-3 bg-white rounded-lg w-48 h-48 flex items-center justify-center overflow-hidden border-2 border-[#90CDF4]">
-                            <img src={method.qrImageUrl} alt="QRIS QR Code" className="w-full h-full object-contain" />
-                          </div>
+                          {qrisImage ? (
+                            <div className="p-3 bg-white rounded-lg w-48 h-48 flex items-center justify-center overflow-hidden border-2 border-[#90CDF4]">
+                              <img src={qrisImage} alt="QRIS QR Code" className="w-full h-full object-contain" />
+                            </div>
+                          ) : (
+                            <p className="text-xs text-white/40">QR Code belum dikonfigurasi.</p>
+                          )}
                           <p className="text-[10px] text-white/50 mt-4 leading-normal text-center">
-                            Atas nama: <b>{method.accountName}</b><br />
+                            Atas nama: <b>{qrisName}</b><br />
                             QRIS mendukung pembayaran Gopay, OVO, Dana, LinkAja, BCA Mobile, dll.
                           </p>
                         </div>
                       );
-                    } else {
+                    } else if (selectedPayment === 'bank_transfer') {
+                      const bankName = shopSettings.payment_bank_name || 'Bank BCA';
+                      const accountNumber = shopSettings.payment_bank_account_number || buyConfig.paymentMethods.find(m => m.type === 'bank_transfer')?.accountNumber || '';
+                      const accountName = shopSettings.payment_bank_account_name || buyConfig.paymentMethods.find(m => m.type === 'bank_transfer')?.accountName || 'Kirin Day Management';
+
                       return (
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                           <div>
                             <p className="text-xs text-white/50 uppercase tracking-wider mb-1" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                              Transfer ke rekening:
+                              Transfer ke {bankName}:
                             </p>
                             <h4 className="text-xl font-black text-white" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                              {method.accountNumber}
+                              {accountNumber}
                             </h4>
                             <p className="text-xs text-[#90CDF4] font-bold mt-1">
-                              {method.accountName}
+                              A.N. {accountName}
                             </p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyAccount(method.accountNumber)}
-                            className="px-6 py-2.5 rounded-full bg-white/5 hover:bg-[#90CDF4]/20 border border-white/10 text-xs font-black transition-all flex items-center gap-2"
-                            style={{ fontFamily: 'Montserrat, sans-serif' }}
-                          >
-                            <Clipboard className="w-4 h-4" />
-                            {copiedAccount === method.accountNumber ? 'Tersalin!' : 'Salin Nomor Rekening'}
-                          </button>
+                          {accountNumber && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyAccount(accountNumber)}
+                              className="px-6 py-2.5 rounded-full bg-white/5 hover:bg-[#90CDF4]/20 border border-white/10 text-xs font-black transition-all flex items-center gap-2 cursor-pointer"
+                              style={{ fontFamily: 'Montserrat, sans-serif' }}
+                            >
+                              <Clipboard className="w-4 h-4" />
+                              {copiedAccount === accountNumber ? 'Tersalin!' : 'Salin Nomor Rekening'}
+                            </button>
+                          )}
                         </div>
                       );
                     }
+                    return null;
                   })()}
                 </div>
               )}

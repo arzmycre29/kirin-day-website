@@ -735,7 +735,7 @@ export function AdminCheckInPage() {
                 <div className="w-full flex flex-col items-center">
                   <div className="relative w-full aspect-square rounded-2xl bg-black overflow-hidden border-2 border-white/10 flex items-center justify-center shadow-inner">
                     {/* Viewport container */}
-                    <div id={scannerContainerId} className="w-full h-full object-cover [&_video]:object-cover" />
+                    <div id={scannerContainerId} className="w-full h-full [&_video]:!w-full [&_video]:!h-full [&_video]:!object-cover [&_div]:!w-full [&_div]:!h-full [&_div]:!max-w-none [&_video]:!max-w-none" />
                     
                     {/* Scan reticle animation overlay */}
                     <div className="absolute inset-8 border border-[#90CDF4]/30 pointer-events-none rounded-xl">

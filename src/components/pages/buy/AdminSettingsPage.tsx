@@ -17,6 +17,12 @@ export function AdminSettingsPage() {
   const [merchPoOpen, setMerchPoOpen] = useState(true);
   const [eventVisibility, setEventVisibility] = useState<Record<string, boolean>>({});
   const [events, setEvents] = useState<any[]>([]);
+
+  const [paymentQrisName, setPaymentQrisName] = useState('');
+  const [paymentQrisImage, setPaymentQrisImage] = useState('');
+  const [paymentBankName, setPaymentBankName] = useState('');
+  const [paymentBankAccountNumber, setPaymentBankAccountNumber] = useState('');
+  const [paymentBankAccountName, setPaymentBankAccountName] = useState('');
   
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -64,13 +70,27 @@ export function AdminSettingsPage() {
       try {
         // 1. Fetch settings
         const settingsRes = await fetch('/api/settings');
-        let settings = { event_visibility: {} as Record<string, boolean>, cheki_po_open: true, merch_po_open: true };
+        let settings = { 
+          event_visibility: {} as Record<string, boolean>, 
+          cheki_po_open: true, 
+          merch_po_open: true,
+          payment_qris_name: '',
+          payment_qris_image: '',
+          payment_bank_name: '',
+          payment_bank_account_number: '',
+          payment_bank_account_name: ''
+        };
         if (settingsRes.ok) {
           settings = await settingsRes.json();
         }
         setChekiPoOpen(settings.cheki_po_open !== false);
         setMerchPoOpen(settings.merch_po_open !== false);
         setEventVisibility(settings.event_visibility || {});
+        setPaymentQrisName(settings.payment_qris_name || '');
+        setPaymentQrisImage(settings.payment_qris_image || '');
+        setPaymentBankName(settings.payment_bank_name || '');
+        setPaymentBankAccountNumber(settings.payment_bank_account_number || '');
+        setPaymentBankAccountName(settings.payment_bank_account_name || '');
 
         // 2. Fetch events from Contentful
         try {
@@ -138,7 +158,12 @@ export function AdminSettingsPage() {
           body: JSON.stringify({
             cheki_po_open: chekiPoOpen,
             merch_po_open: merchPoOpen,
-            event_visibility: eventVisibility
+            event_visibility: eventVisibility,
+            payment_qris_name: paymentQrisName,
+            payment_qris_image: paymentQrisImage,
+            payment_bank_name: paymentBankName,
+            payment_bank_account_number: paymentBankAccountNumber,
+            payment_bank_account_name: paymentBankAccountName
           })
         });
 
@@ -362,6 +387,92 @@ export function AdminSettingsPage() {
                   })}
                 </div>
               )}
+            </div>
+
+            {/* PAYMENT INFORMATION SETTINGS */}
+            <div className="p-4 sm:p-8 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm shadow-xl space-y-6">
+              <h3 className="text-xl font-black text-white mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                Pengaturan Informasi Pembayaran (QRIS &amp; Transfer Bank)
+              </h3>
+              <p className="text-sm text-white/50 leading-relaxed mb-6" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                Atur informasi pembayaran yang akan ditampilkan pada halaman checkout pembeli.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-white/5">
+                {/* QRIS SETTINGS */}
+                <div className="space-y-4">
+                  <h4 className="font-black text-sm text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    1. METODE QRIS
+                  </h4>
+                  <div>
+                    <label className="block text-xs font-bold text-white/70 mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      Nama Merchant / Atas Nama QRIS
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentQrisName}
+                      onChange={(e) => setPaymentQrisName(e.target.value)}
+                      placeholder="Contoh: Kirin Day Management"
+                      className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-black/40 text-white outline-none focus:border-[#90CDF4] text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-white/70 mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      URL Gambar QR Code QRIS
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentQrisImage}
+                      onChange={(e) => setPaymentQrisImage(e.target.value)}
+                      placeholder="Contoh: https://imageurl.com/qris.jpg"
+                      className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-black/40 text-white outline-none focus:border-[#90CDF4] text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* BANK TRANSFER SETTINGS */}
+                <div className="space-y-4">
+                  <h4 className="font-black text-sm text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    2. METODE TRANSFER BANK
+                  </h4>
+                  <div>
+                    <label className="block text-xs font-bold text-white/70 mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      Nama Bank
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentBankName}
+                      onChange={(e) => setPaymentBankName(e.target.value)}
+                      placeholder="Contoh: Bank BCA"
+                      className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-black/40 text-white outline-none focus:border-[#90CDF4] text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-white/70 mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      Nomor Rekening Bank
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentBankAccountNumber}
+                      onChange={(e) => setPaymentBankAccountNumber(e.target.value)}
+                      placeholder="Contoh: 7770981234"
+                      className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-black/40 text-white outline-none focus:border-[#90CDF4] text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-white/70 mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      Nama Pemilik Rekening Bank
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentBankAccountName}
+                      onChange={(e) => setPaymentBankAccountName(e.target.value)}
+                      placeholder="Contoh: Kirin Day Management"
+                      className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-black/40 text-white outline-none focus:border-[#90CDF4] text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* SAVE BUTTON DOCK */}
