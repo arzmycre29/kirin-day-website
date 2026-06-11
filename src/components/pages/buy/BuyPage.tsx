@@ -1251,7 +1251,7 @@ export function BuyPage() {
                           {/* COUNTERS FOR SOLO AND REGULER */}
                           <div className="mt-5 space-y-4 pt-4 border-t border-white/5">
                             {/* Row 1: Solo */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/10 p-3 rounded-lg border border-white/5">
+                            <div className="flex flex-row items-center justify-between gap-2 bg-black/10 p-3 rounded-lg border border-white/5">
                               <div>
                                 <span className="text-xs font-black text-white block" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                                   Solo ({formatRpString(priceSolo)})
@@ -1295,7 +1295,7 @@ export function BuyPage() {
                             </div>
 
                             {/* Row 2: Reguler (Two Shot) */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/10 p-3 rounded-lg border border-white/5">
+                            <div className="flex flex-row items-center justify-between gap-2 bg-black/10 p-3 rounded-lg border border-white/5">
                               <div>
                                 <span className="text-xs font-black text-white block" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                                   Reguler ({formatRpString(priceTwoShot)})
