@@ -126,7 +126,8 @@ export function AdminCheckInPage() {
         cameraId,
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: { width: 176, height: 176 },
+          aspectRatio: 1.0,
         },
         (decodedText) => {
           handleQrDecoded(decodedText);
@@ -738,7 +739,7 @@ export function AdminCheckInPage() {
                     <div id={scannerContainerId} className="w-full h-full [&_video]:!w-full [&_video]:!h-full [&_video]:!object-cover [&>div]:!w-full [&>div]:!h-full [&>div]:!max-w-none [&_video]:!max-w-none" />
                     
                     {/* Scan reticle animation overlay */}
-                    <div className="absolute inset-8 border border-[#90CDF4]/30 pointer-events-none rounded-xl">
+                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-44 h-44 border border-[#90CDF4]/30 pointer-events-none rounded-xl">
                       <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-[#90CDF4]" />
                       <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-[#90CDF4]" />
                       <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-[#90CDF4]" />
