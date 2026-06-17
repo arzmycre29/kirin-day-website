@@ -4,7 +4,7 @@ import {
   Search, Eye, CheckCircle2, XCircle, LogOut, Loader2, Calendar, 
   User, Mail, Phone, Instagram, FileText, ChevronLeft, ChevronRight, 
   MapPin, ShoppingBag, Wallet, AlertTriangle, ExternalLink, RefreshCw,
-  Download, Trash2, X, CheckSquare, Settings
+  Download, Trash2, X, CheckSquare, Settings, ChevronDown
 } from 'lucide-react';
 import buyConfig from '../../../../config/buyConfig.js';
 
@@ -39,6 +39,7 @@ interface Order {
   created_at: string;
   updated_at: string;
   is_redeemed?: boolean;
+  is_archived?: boolean;
 }
 
 export function AdminOrdersPage() {
@@ -62,6 +63,9 @@ export function AdminOrdersPage() {
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isBackupLoading, setIsBackupLoading] = useState(false);
   const [isPurgeLoading, setIsPurgeLoading] = useState(false);
+  const [isDeleteLoading, setIsDeleteLoading] = useState(false);
+  const [isClearArchiveLoading, setIsClearArchiveLoading] = useState(false);
+  const [showBackupDropdown, setShowBackupDropdown] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -260,6 +264,105 @@ export function AdminOrdersPage() {
     localStorage.removeItem('admin_password');
     localStorage.removeItem('admin_login_timestamp');
     navigate('/admin/login');
+  };
+
+  const handleClearAllArchive = async () => {
+    if (!token) return;
+
+    const confirm1 = window.confirm(
+      "PERINGATAN KERAS: Tindakan ini akan MENGHAPUS SEMUA DATA PESANAN YANG DIARSIPKAN secara permanen dari database!\n\n" +
+      "Tindakan ini tidak dapat dibatalkan. Apakah Anda yakin ingin melanjutkan?"
+    );
+    if (!confirm1) return;
+
+    const confirm2 = window.confirm(
+      "KONFIRMASI TERAKHIR: Ketik OK atau konfirmasi sekali lagi untuk menghapus seluruh riwayat pesanan yang diarsipkan selamanya."
+    );
+    if (!confirm2) return;
+
+    setIsClearArchiveLoading(true);
+    setActionMessage(null);
+    try {
+      const res = await fetch('/api/orders/archive/clear', {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem('admin_password');
+        navigate('/admin/login');
+        return;
+      }
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal menghapus data arsip.');
+      }
+
+      setActionMessage({
+        type: 'success',
+        text: data.message || 'Semua data pesanan terarsip berhasil dihapus permanen.'
+      });
+
+      if (selectedOrder && selectedOrder.is_archived) {
+        setSelectedOrder(null);
+      }
+      refreshOrders();
+    } catch (err: any) {
+      console.error(err);
+      setActionMessage({ type: 'error', text: err.message || 'Gagal menghapus data arsip.' });
+    } finally {
+      setIsClearArchiveLoading(false);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!token) return;
+
+    const confirm1 = window.confirm(
+      `Apakah Anda yakin ingin menghapus pesanan ${orderId} secara PERMANEN dari database?\n\n` +
+      `Tindakan ini tidak dapat dibatalkan.`
+    );
+    if (!confirm1) return;
+
+    setIsDeleteLoading(true);
+    setActionMessage(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem('admin_password');
+        navigate('/admin/login');
+        return;
+      }
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal menghapus pesanan.');
+      }
+
+      setActionMessage({
+        type: 'success',
+        text: `Pesanan ${orderId} berhasil dihapus secara permanen.`
+      });
+
+      if (selectedOrder && selectedOrder.order_id === orderId) {
+        setSelectedOrder(null);
+      }
+      refreshOrders();
+    } catch (err: any) {
+      console.error(err);
+      setActionMessage({ type: 'error', text: err.message || 'Gagal menghapus pesanan.' });
+    } finally {
+      setIsDeleteLoading(false);
+    }
   };
 
   // 3. Status Action Handler (Approve)
@@ -505,57 +608,60 @@ export function AdminOrdersPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={() => navigate('/admin/check-in')}
-            className="px-3.5 py-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-500 text-emerald-400 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-            style={{ fontFamily: 'Montserrat, sans-serif' }}
-            title="Masuk ke mode check-in pencarian cepat untuk pengambilan cheki/merchandise di booth event"
-          >
-            <CheckSquare className="w-3.5 h-3.5" />
-            Mode Check-in
-          </button>
-
-          <button
-            onClick={() => navigate('/admin/event-po-setting')}
-            className="px-3.5 py-2 rounded-xl border border-[#90CDF4]/20 bg-[#90CDF4]/5 hover:bg-[#90CDF4]/15 hover:border-[#90CDF4] text-[#90CDF4] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-            style={{ fontFamily: 'Montserrat, sans-serif' }}
-            title="Kelola visibilitas event dan toggle buka/tutup toko pre-order"
-          >
-            <Settings className="w-3.5 h-3.5" />
-            Pengaturan PO
-          </button>
-
-          <button
-            onClick={() => handleDownloadBackup(false)}
-            disabled={isBackupLoading}
-            className="px-3.5 py-2 rounded-xl border border-[#90CDF4]/20 bg-[#90CDF4]/5 hover:bg-[#90CDF4]/15 hover:border-[#90CDF4] text-[#90CDF4] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
-            style={{ fontFamily: 'Montserrat, sans-serif' }}
-            title="Unduh rekap CSV dan bukti bayar pesanan aktif ke dalam file ZIP"
-          >
-            {isBackupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} 
-            Backup Aktif
-          </button>
-
-          <button
-            onClick={() => handleDownloadBackup(true)}
-            disabled={isBackupLoading}
-            className="px-3.5 py-2 rounded-xl border border-[#90CDF4]/20 bg-[#90CDF4]/5 hover:bg-[#90CDF4]/15 hover:border-[#90CDF4] text-[#90CDF4] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
-            style={{ fontFamily: 'Montserrat, sans-serif' }}
-            title="Unduh rekap CSV dan bukti bayar seluruh pesanan (termasuk arsip) ke dalam file ZIP"
-          >
-            {isBackupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} 
-            Bulk Backup
-          </button>
+          {/* Dropdown Backup */}
+          <div className="relative">
+            <button
+              onClick={() => setShowBackupDropdown(!showBackupDropdown)}
+              disabled={isBackupLoading}
+              className="px-3.5 py-2 rounded-xl border border-[#90CDF4]/20 bg-[#90CDF4]/5 hover:bg-[#90CDF4]/15 hover:border-[#90CDF4] text-[#90CDF4] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              style={{ fontFamily: 'Montserrat, sans-serif' }}
+              title="Unduh rekap CSV dan bukti bayar pesanan ke dalam file ZIP"
+            >
+              {isBackupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} 
+              Unduh Rekap (Backup)
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+            
+            {showBackupDropdown && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowBackupDropdown(false)} />
+                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#152238] shadow-xl z-20 py-1.5 overflow-hidden">
+                  <button
+                    onClick={() => {
+                      handleDownloadBackup(false);
+                      setShowBackupDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs font-bold text-white/80 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer"
+                    style={{ fontFamily: 'Montserrat, sans-serif' }}
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#90CDF4]" />
+                    HANYA PESANAN AKTIF
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleDownloadBackup(true);
+                      setShowBackupDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs font-bold text-white/80 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 border-t border-white/5 cursor-pointer"
+                    style={{ fontFamily: 'Montserrat, sans-serif' }}
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#90CDF4]" />
+                    SEMUA PESANAN (+ ARSIP)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
 
           <button
             onClick={handlePurgeProofs}
             disabled={isPurgeLoading}
             className="px-3.5 py-2 rounded-xl border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/15 hover:border-amber-500 text-amber-400 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
             style={{ fontFamily: 'Montserrat, sans-serif' }}
-            title="Hapus gambar bukti pembayaran dari pesanan yang sudah disetujui/ditolak untuk menghemat penyimpanan"
+            title="Arsipkan pesanan selesai (Diterima/Ditolak) dan hapus bukti transfer lamanya"
           >
             {isPurgeLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} 
-            Bersihkan Bukti
+            Bersihkan Sesi (Arsipkan)
           </button>
 
           <button
@@ -653,6 +759,24 @@ export function AdminOrdersPage() {
                   />
                   <span className="font-bold text-white/70 hover:text-white transition-colors">Tampilkan Arsip</span>
                 </label>
+                
+                {showArchived && (
+                  <>
+                    <span className="text-white/20">|</span>
+                    <button
+                      type="button"
+                      onClick={handleClearAllArchive}
+                      disabled={isClearArchiveLoading || orders.length === 0}
+                      className="px-2.5 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 hover:bg-red-500 hover:text-white text-red-400 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      style={{ fontFamily: 'Montserrat, sans-serif' }}
+                      title="Hapus semua pesanan yang diarsipkan dari database secara permanen"
+                    >
+                      {isClearArchiveLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                      Kosongkan Semua Arsip
+                    </button>
+                  </>
+                )}
+
                 <span className="text-white/20">|</span>
                 <span className="font-bold">Total: {totalOrders} Pesanan</span>
                 <button
@@ -1034,7 +1158,7 @@ export function AdminOrdersPage() {
                       type="button"
                       disabled={isActionLoading}
                       onClick={() => setIsRejectModalOpen(true)}
-                      className="py-3 rounded-xl border border-red-500/30 bg-red-950/25 text-red-400 hover:bg-red-500 hover:text-white font-black uppercase text-xs tracking-wider transition-all disabled:opacity-40 flex items-center justify-center gap-1.5"
+                      className="py-3 rounded-xl border border-red-500/30 bg-red-950/25 text-red-400 hover:bg-red-500 hover:text-white font-black uppercase text-xs tracking-wider transition-all disabled:opacity-40 flex items-center justify-center gap-1.5 cursor-pointer"
                       style={{ fontFamily: 'Montserrat, sans-serif' }}
                     >
                       <XCircle className="w-4 h-4" /> Tolak Bukti
@@ -1045,11 +1169,27 @@ export function AdminOrdersPage() {
                       type="button"
                       disabled={isActionLoading}
                       onClick={() => handleApproveOrder(selectedOrder.order_id)}
-                      className="py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-xs tracking-wider transition-all disabled:opacity-40 flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10"
+                      className="py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-xs tracking-wider transition-all disabled:opacity-40 flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 cursor-pointer"
                       style={{ fontFamily: 'Montserrat, sans-serif' }}
                     >
                       {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                       Setujui Order
+                    </button>
+                  </div>
+                )}
+
+                {/* Delete Archived Order Button */}
+                {selectedOrder.is_archived && (
+                  <div className="pt-4 border-t border-white/5">
+                    <button
+                      type="button"
+                      disabled={isDeleteLoading}
+                      onClick={() => handleDeleteOrder(selectedOrder.order_id)}
+                      className="w-full py-3 rounded-xl border border-red-500/30 bg-red-950/25 hover:bg-red-500 text-red-400 hover:text-white font-black uppercase text-xs tracking-wider transition-all disabled:opacity-40 flex items-center justify-center gap-1.5 cursor-pointer"
+                      style={{ fontFamily: 'Montserrat, sans-serif' }}
+                    >
+                      {isDeleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      Hapus Permanen dari Database
                     </button>
                   </div>
                 )}

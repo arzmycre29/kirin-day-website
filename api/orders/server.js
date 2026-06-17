@@ -1095,6 +1095,64 @@ app.put('/api/orders/:id/redeem', adminAuth, async (req, res) => {
   }
 });
 
+// Route: Delete all archived orders from database (Admin)
+app.delete('/api/orders/archive/clear', adminAuth, async (req, res) => {
+  try {
+    const { data, error, count } = await supabase
+      .from('orders')
+      .delete({ count: 'exact' })
+      .eq('is_archived', true);
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      deletedCount: count || 0,
+      message: `${count || 0} data pesanan terarsip berhasil dihapus secara permanen.`
+    });
+  } catch (err) {
+    console.error("Clear archive error:", err);
+    res.status(500).json({ error: "Gagal menghapus data pesanan terarsip." });
+  }
+});
+
+// Route: Delete a specific archived order from database (Admin)
+app.delete('/api/orders/:id', adminAuth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Verifikasi terlebih dahulu apakah order tersebut terarsip
+    const { data: orders, error: checkErr } = await supabase
+      .from('orders')
+      .select('is_archived')
+      .eq('order_id', id);
+
+    if (checkErr) throw checkErr;
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({ error: "Pesanan tidak ditemukan." });
+    }
+
+    const order = orders[0];
+    if (!order.is_archived) {
+      return res.status(400).json({ error: "Hanya pesanan yang sudah diarsipkan yang dapat dihapus secara permanen." });
+    }
+
+    const { error: deleteErr } = await supabase
+      .from('orders')
+      .delete()
+      .eq('order_id', id);
+
+    if (deleteErr) throw deleteErr;
+
+    res.json({
+      success: true,
+      message: `Pesanan ${id} berhasil dihapus secara permanen.`
+    });
+  } catch (err) {
+    console.error("Delete order error:", err);
+    res.status(500).json({ error: "Gagal menghapus pesanan." });
+  }
+});
+
 // Error handling middleware for Multer errors
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
