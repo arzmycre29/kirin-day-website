@@ -116,29 +116,55 @@ export function AdminCheckInPage() {
     try {
       setScannerError(null);
       if (html5QrCodeRef.current) {
-        await html5QrCodeRef.current.stop();
+        try {
+          await html5QrCodeRef.current.stop();
+        } catch {}
       }
 
       const html5QrCode = new Html5Qrcode(scannerContainerId);
       html5QrCodeRef.current = html5QrCode;
 
-      await html5QrCode.start(
-        cameraId,
-        {
-          fps: 15,
-          qrbox: (width, height) => {
-            const minSize = Math.min(width, height);
-            const size = Math.floor(minSize * 0.75);
-            return { width: size, height: size };
+      // 1. Coba dengan konfigurasi ideal (fps tinggi dan qrbox dinamis)
+      try {
+        await html5QrCode.start(
+          cameraId,
+          {
+            fps: 15,
+            qrbox: (width, height) => {
+              const minSize = Math.min(width, height);
+              const size = Math.floor(minSize * 0.75);
+              return { width: size, height: size };
+            },
           },
-        },
-        (decodedText) => {
-          handleQrDecoded(decodedText);
-        },
-        () => {
-          // ignore scan errors
-        }
-      );
+          (decodedText) => {
+            handleQrDecoded(decodedText);
+          },
+          () => {
+            // ignore scan errors
+          }
+        );
+      } catch (startErr) {
+        console.warn("Gagal inisiasi dengan konfigurasi ideal, mencoba fallback...", startErr);
+        
+        try {
+          await html5QrCode.stop();
+        } catch {}
+        
+        // 2. Fallback: Inisiasi ulang tanpa konfigurasi kustom (biarkan native default)
+        const fallbackQrCode = new Html5Qrcode(scannerContainerId);
+        html5QrCodeRef.current = fallbackQrCode;
+        
+        await fallbackQrCode.start(
+          cameraId,
+          {}, // Konfigurasi kosong untuk fallback agar browser menggunakan defaultnya sendiri
+          (decodedText) => {
+            handleQrDecoded(decodedText);
+          },
+          () => {
+            // ignore scan errors
+          }
+        );
+      }
     } catch (err: any) {
       console.error("Scanner start error:", err);
       setScannerError('Gagal memulai kamera: ' + (err.message || err));
@@ -755,6 +781,22 @@ export function AdminCheckInPage() {
                   <p className="text-[11px] text-white/50 font-bold text-center mt-4 uppercase tracking-widest flex items-center gap-1.5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                     <Camera className="w-3.5 h-3.5 text-[#90CDF4] animate-pulse" /> Arahkan kamera ke QR Code pembeli
                   </p>
+
+                  {/* Tips Scan untuk Laptop/Kamera Depan */}
+                  <div className="mt-6 p-4 rounded-xl border border-[#90CDF4]/10 bg-[#90CDF4]/5 text-[11px] leading-relaxed max-w-sm text-left text-white/70 space-y-1.5">
+                    <p className="font-black text-[#90CDF4] uppercase tracking-wider mb-1" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      💡 Tips Scan Kamera Laptop:
+                    </p>
+                    <p>
+                      • <strong>Jarak Ideal:</strong> Jauhkan ponsel sekitar <strong>35-45 cm</strong> dari webcam laptop. Lensa webcam laptop bertipe <em>Fixed Focus</em> dan butuh jarak agar QR Code tidak terlihat buram.
+                    </p>
+                    <p>
+                      • <strong>Kecerahan Layar:</strong> Naikkan tingkat kecerahan layar HP minimal 80% agar kode QR terlihat kontras.
+                    </p>
+                    <p>
+                      • <strong>Hindari Pantulan:</strong> Miringkan sedikit layar HP agar tidak memantulkan cahaya monitor laptop langsung ke webcam.
+                    </p>
+                  </div>
                 </div>
               ) : scanResult.status === 'processing' ? (
                 <div className="py-12 text-center flex flex-col items-center justify-center gap-3">
