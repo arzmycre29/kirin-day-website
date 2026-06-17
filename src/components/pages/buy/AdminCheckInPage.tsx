@@ -125,9 +125,12 @@ export function AdminCheckInPage() {
       await html5QrCode.start(
         cameraId,
         {
-          fps: 10,
-          qrbox: { width: 176, height: 176 },
-          aspectRatio: 1.0,
+          fps: 15,
+          qrbox: (width, height) => {
+            const minSize = Math.min(width, height);
+            const size = Math.floor(minSize * 0.75);
+            return { width: size, height: size };
+          },
         },
         (decodedText) => {
           handleQrDecoded(decodedText);
