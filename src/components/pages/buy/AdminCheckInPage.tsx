@@ -671,14 +671,24 @@ export function AdminCheckInPage() {
                           </div>
                         </td>
                         <td className="py-4 px-4 text-center">
-                          <a
-                            href={item.payment_proof_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#90CDF4]/10 hover:bg-[#90CDF4]/20 border border-[#90CDF4]/20 text-[#90CDF4] text-[10px] font-black uppercase tracking-wider transition-all"
-                          >
-                            Buka <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
+                          {item.payment_proof_url && item.payment_proof_url.toLowerCase().startsWith('http') ? (
+                            <a
+                              href={item.payment_proof_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#90CDF4]/10 hover:bg-[#90CDF4]/20 border border-[#90CDF4]/20 text-[#90CDF4] text-[10px] font-black uppercase tracking-wider transition-all"
+                            >
+                              Buka <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => alert(item.payment_proof_url || 'Transaksi Terverifikasi')}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                            >
+                              Detail <ExternalLink className="w-2.5 h-2.5" />
+                            </button>
+                          )}
                         </td>
                         <td className="py-4 px-5 text-center">
                           <label className="inline-flex items-center justify-center cursor-pointer p-2">

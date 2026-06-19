@@ -660,7 +660,17 @@ export function OrderStatusPage() {
                 </h4>
                 
                 <div className="relative rounded-xl border border-white/10 bg-black/30 overflow-hidden aspect-video flex items-center justify-center">
-                  {order.payment_proof_url.toLowerCase().endsWith('.pdf') ? (
+                  {!order.payment_proof_url || !order.payment_proof_url.toLowerCase().startsWith('http') ? (
+                    <div className="text-center p-6 flex flex-col items-center justify-center gap-2">
+                      <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto" />
+                      <h4 className="text-xs font-black text-emerald-300 uppercase tracking-wider" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                        Pembelian On-The-Spot
+                      </h4>
+                      <p className="text-[10px] text-white/50 leading-relaxed max-w-[240px]">
+                        {order.payment_proof_url || 'Metode pembayaran terverifikasi langsung oleh Admin.'}
+                      </p>
+                    </div>
+                  ) : order.payment_proof_url.toLowerCase().endsWith('.pdf') ? (
                     <div className="text-center p-4">
                       <FileText className="w-12 h-12 text-[#90CDF4] mx-auto mb-2" />
                       <p className="text-xs font-bold text-white/80">Dokumen Bukti Transfer (PDF)</p>

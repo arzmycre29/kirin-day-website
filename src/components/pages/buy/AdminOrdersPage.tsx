@@ -1117,8 +1117,18 @@ export function AdminOrdersPage() {
                     <span className="text-xs font-black uppercase text-[#F6E05E]">{selectedOrder.payment_method}</span>
                   </div>
                   
-                  <div className="relative rounded-xl border border-white/10 bg-black/35 overflow-hidden aspect-video flex items-center justify-center">
-                    {selectedOrder.payment_proof_url.toLowerCase().endsWith('.pdf') ? (
+                  <div className="relative rounded-xl border border-white/10 bg-black/35 overflow-hidden aspect-video flex items-center justify-center w-full">
+                    {!selectedOrder.payment_proof_url || !selectedOrder.payment_proof_url.toLowerCase().startsWith('http') ? (
+                      <div className="text-center p-6 flex flex-col items-center justify-center gap-2">
+                        <CheckCircle2 className="w-10 h-10 text-emerald-400 animate-pulse" />
+                        <h4 className="text-xs font-black text-emerald-300 uppercase tracking-wider" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                          Transaksi Terverifikasi (OTS)
+                        </h4>
+                        <p className="text-[10px] text-white/50 leading-relaxed max-w-[240px]">
+                          {selectedOrder.payment_proof_url || 'Metode pembayaran terverifikasi langsung oleh Admin.'}
+                        </p>
+                      </div>
+                    ) : selectedOrder.payment_proof_url.toLowerCase().endsWith('.pdf') ? (
                       <div className="text-center p-4">
                         <FileText className="w-10 h-10 text-[#90CDF4] mx-auto mb-1.5" />
                         <p className="text-[11px] font-bold text-white/80">Dokumen PDF</p>
