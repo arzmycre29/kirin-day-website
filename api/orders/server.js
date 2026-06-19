@@ -481,6 +481,316 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
 
 // ================= ADMIN ENDPOINTS =================
 
+// Route: Create On-The-Spot (OTS) Order (Admin)
+app.post('/api/orders/ots', adminAuth, async (req, res) => {
+  try {
+    const {
+      buyer_name,
+      buyer_email,
+      buyer_whatsapp,
+      buyer_instagram,
+      cheki_items,
+      merch_items,
+      payment_method,
+      notes,
+      event_name,
+      is_redeemed,
+      bypass_quotas
+    } = req.body;
+
+    // 1. Basic Validations
+    if (!buyer_name || !payment_method || !event_name) {
+      return res.status(400).json({ error: "Nama pembeli, metode pembayaran, dan event wajib diisi." });
+    }
+
+    if (buyer_name.trim().length < 3) {
+      return res.status(400).json({ error: "Nama lengkap minimal 3 karakter." });
+    }
+
+    if (payment_method !== 'Cash' && payment_method !== 'QRIS') {
+      return res.status(400).json({ error: "Metode pembayaran harus berupa Cash atau QRIS." });
+    }
+
+    // WhatsApp normalize and validate if provided
+    let waNormalized = '';
+    if (buyer_whatsapp && buyer_whatsapp.trim().length > 0) {
+      const waClean = buyer_whatsapp.trim();
+      const waRegex = /^(?:\+62|62|0)8[1-9][0-9]{7,11}$/;
+      if (!waRegex.test(waClean)) {
+        return res.status(400).json({ error: "Format nomor WA tidak valid (contoh: 08123456789)." });
+      }
+      if (waClean.startsWith('08')) {
+        waNormalized = '+628' + waClean.substring(2);
+      } else if (waClean.startsWith('628')) {
+        waNormalized = '+' + waClean;
+      } else if (waClean.startsWith('8')) {
+        waNormalized = '+628' + waClean.substring(1);
+      } else {
+        waNormalized = waClean;
+      }
+    }
+
+    // Instagram auto-strip leading @ and validate if provided
+    let igClean = '';
+    if (buyer_instagram && buyer_instagram.trim().length > 0) {
+      igClean = buyer_instagram.trim().replace(/^@/, '');
+      const igRegex = /^[a-zA-Z0-9_.]+$/;
+      if (!igRegex.test(igClean) || igClean.includes(' ')) {
+        return res.status(400).json({ error: "Username Instagram tidak valid." });
+      }
+    }
+
+    // Validate email if provided
+    let isEmailValid = false;
+    if (buyer_email && buyer_email.trim().length > 0) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(buyer_email.trim())) {
+        return res.status(400).json({ error: "Format email tidak valid." });
+      }
+      // Check if it's not a dummy/system email
+      const lowerEmail = buyer_email.trim().toLowerCase();
+      if (!lowerEmail.endsWith('@example.com') && lowerEmail !== 'ots@kirinday.id') {
+        isEmailValid = true;
+      }
+    }
+
+    // Parse items
+    let chekiList = [];
+    let merchList = [];
+    try {
+      chekiList = typeof cheki_items === 'string' ? JSON.parse(cheki_items) : (cheki_items || []);
+      merchList = typeof merch_items === 'string' ? JSON.parse(merch_items) : (merch_items || []);
+    } catch (e) {
+      return res.status(400).json({ error: "Format data barang belanjaan tidak valid." });
+    }
+
+    const totalChekiCount = chekiList.reduce((sum, item) => sum + item.quantity, 0);
+    const totalMerchCount = merchList.reduce((sum, item) => sum + item.quantity, 0);
+
+    if (totalChekiCount === 0 && totalMerchCount === 0) {
+      return res.status(400).json({ error: "Keranjang belanja kosong. Harap pilih minimal 1 item." });
+    }
+
+    // 2. Quota validations (if not bypassed)
+    if (!bypass_quotas && totalChekiCount > 0 && event_name) {
+      // Fetch shop settings
+      const { data: settingsData } = await supabase
+        .from('shop_settings')
+        .select('*');
+
+      const settings = {};
+      if (settingsData) {
+        settingsData.forEach(item => {
+          settings[item.key] = item.value;
+        });
+      }
+
+      // Check event-level cheki quota
+      const eventQuotas = settings.event_cheki_quotas || {};
+      const quota = eventQuotas[event_name];
+      if (quota !== undefined && quota !== null && quota !== "" && Number(quota) > 0) {
+        const { data: eventOrders } = await supabase
+          .from('orders')
+          .select('cheki_items')
+          .eq('event_name', event_name)
+          .neq('status', 'rejected');
+
+        let currentChekiCount = 0;
+        if (eventOrders) {
+          eventOrders.forEach(o => {
+            let items = [];
+            try {
+              items = typeof o.cheki_items === 'string' ? JSON.parse(o.cheki_items) : o.cheki_items;
+            } catch(e) {}
+            if (Array.isArray(items)) {
+              items.forEach(item => {
+                currentChekiCount += (item.quantity || 0);
+              });
+            }
+          });
+        }
+
+        if (currentChekiCount + totalChekiCount > Number(quota)) {
+          const remaining = Math.max(0, Number(quota) - currentChekiCount);
+          return res.status(400).json({ 
+            error: `Kuota Cheki untuk event ini hampir penuh. Tersisa ${remaining} slot cheki.` 
+          });
+        }
+      }
+
+      // Check member-level cheki quota
+      const eventMemberQuotas = settings.event_member_cheki_quotas || {};
+      const memberQuotas = eventMemberQuotas[event_name] || {};
+      const memberQuotasDefined = Object.keys(memberQuotas).length > 0;
+      if (memberQuotasDefined) {
+        const { data: eventOrders } = await supabase
+          .from('orders')
+          .select('cheki_items')
+          .eq('event_name', event_name)
+          .neq('status', 'rejected');
+
+        const memberOrdered = {};
+        if (eventOrders) {
+          eventOrders.forEach(o => {
+            let items = [];
+            try {
+              items = typeof o.cheki_items === 'string' ? JSON.parse(o.cheki_items) : o.cheki_items;
+            } catch(e) {}
+            if (Array.isArray(items)) {
+              items.forEach(item => {
+                const mid = item.member_id || item.id;
+                if (mid) {
+                  memberOrdered[mid] = (memberOrdered[mid] || 0) + (item.quantity || 0);
+                }
+              });
+            }
+          });
+        }
+
+        for (const item of chekiList) {
+          const mid = item.member_id || item.id;
+          if (mid && memberQuotas[mid] !== undefined && memberQuotas[mid] !== null && memberQuotas[mid] !== "") {
+            const quota = Number(memberQuotas[mid]);
+            if (quota > 0) {
+              const currentCount = memberOrdered[mid] || 0;
+              if (currentCount + item.quantity > quota) {
+                const remaining = Math.max(0, quota - currentCount);
+                return res.status(400).json({ 
+                  error: `Stok Cheki untuk member ${item.member_name} tidak mencukupi. Tersisa ${remaining} lembar.` 
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Calculate Grand Total
+    let calculatedTotal = 0;
+    chekiList.forEach(item => {
+      calculatedTotal += item.quantity * item.unit_price;
+    });
+    merchList.forEach(item => {
+      calculatedTotal += item.quantity * item.unit_price;
+    });
+
+    // Generate Order ID
+    const orderId = generateOrderId('OTS');
+
+    // Save OTS Order to Database
+    const { error: dbError } = await supabase
+      .from('orders')
+      .insert([{
+        order_id: orderId,
+        buyer_name,
+        buyer_email: buyer_email || '',
+        buyer_whatsapp: waNormalized || '',
+        buyer_instagram: igClean || '',
+        redeem_method: 'event',
+        shipping_address: null,
+        cheki_items: chekiList,
+        merch_items: merchList,
+        grand_total: calculatedTotal,
+        notes: notes || null,
+        payment_method,
+        payment_proof_url: 'OTS - Terverifikasi oleh Admin',
+        status: 'approved',
+        admin_notes: 'Transaksi On-The-Spot',
+        event_name: event_name || null,
+        is_redeemed: is_redeemed !== false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }]);
+
+    if (dbError) {
+      console.error("Database insert error for OTS:", dbError);
+      return res.status(500).json({ error: "Gagal menyimpan data pesanan OTS." });
+    }
+
+    // Send Confirmation Email if email is valid
+    if (isEmailValid) {
+      try {
+        let detailsHtml = `
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 25px;">
+            <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 16px; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">Rincian Belanja</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+        `;
+
+        chekiList.forEach(item => {
+          detailsHtml += `
+            <tr>
+              <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; color: #334155;">
+                <strong>Cheki ${item.member_name}</strong><br>
+                <span style="font-size: 12px; color: #64748b;">Tipe: ${item.type}</span>
+              </td>
+              <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; text-align: center; color: #334155;">x${item.quantity}</td>
+              <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; text-align: right; color: #334155;">Rp ${item.subtotal.toLocaleString('id-ID')}</td>
+            </tr>
+          `;
+        });
+
+        merchList.forEach(item => {
+          detailsHtml += `
+            <tr>
+              <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; color: #334155;">
+                <strong>${item.merch_name}</strong>
+              </td>
+              <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; text-align: center; color: #334155;">x${item.quantity}</td>
+              <td style="padding: 10px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; text-align: right; color: #334155;">Rp ${item.subtotal.toLocaleString('id-ID')}</td>
+            </tr>
+          `;
+        });
+
+        detailsHtml += `
+              <tr style="font-weight: bold;">
+                <td colspan="2" style="padding: 15px 0 0 0; font-size: 16px; color: #0f172a;">Total Pembayaran</td>
+                <td style="padding: 15px 0 0 0; font-size: 16px; text-align: right; color: #0f172a;">Rp ${calculatedTotal.toLocaleString('id-ID')}</td>
+              </tr>
+            </table>
+          </div>
+        `;
+
+        const mainText = `Halo!<br><br>` +
+          `Pembelian On-The-Spot Anda dengan ID <strong>${orderId}</strong> telah berhasil diproses dan dikonfirmasi oleh Admin.<br><br>` +
+          `Pembayaran telah diterima menggunakan metode <strong>${payment_method}</strong>.<br><br>` +
+          `Silakan ambil pesanan Anda langsung di booth event Kirin Day jika Anda belum menerimanya.`;
+
+        const emailHtml = buildHtmlEmail({
+          title: "Pembelian OTS Sukses",
+          subtitle: `Order ID: #${orderId}`,
+          buyerName: buyer_name,
+          mainText: mainText,
+          detailsHtml: detailsHtml,
+          ctaUrl: `${getAppUrl(req)}/buy/status?id=${orderId}`,
+          ctaText: "Cek Status Pesanan"
+        });
+
+        sendEmail({
+          to: buyer_email.trim(),
+          subject: `[Order #${orderId}] Pembelian OTS Berhasil Diproses!`,
+          html: emailHtml
+        }).catch(err => {
+          console.error(`Gagal mengirim email konfirmasi OTS latar belakang untuk order ${orderId}:`, err);
+        });
+      } catch (emailErr) {
+        console.error("Error preparing OTS confirmation email:", emailErr);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Pesanan OTS ${orderId} berhasil diproses.`,
+      order_id: orderId
+    });
+
+  } catch (err) {
+    console.error("OTS creation internal error:", err);
+    res.status(500).json({ error: "Terjadi kesalahan internal sistem saat memproses OTS." });
+  }
+});
+
+// ================= ADMIN ENDPOINTS =================
+
 // Route: Get all orders (Admin)
 app.get('/api/orders', adminAuth, async (req, res) => {
   const { status, search, page = 1, show_archived = 'false', limit: queryLimit } = req.query;

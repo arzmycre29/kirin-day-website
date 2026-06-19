@@ -4,7 +4,7 @@ import {
   Search, Eye, CheckCircle2, XCircle, LogOut, Loader2, Calendar, 
   User, Mail, Phone, Instagram, FileText, ChevronLeft, ChevronRight, 
   MapPin, ShoppingBag, Wallet, AlertTriangle, ExternalLink, RefreshCw,
-  Download, Trash2, X, CheckSquare, Settings, ChevronDown
+  Download, Trash2, X, CheckSquare, Settings, ChevronDown, Plus
 } from 'lucide-react';
 import buyConfig from '../../../../config/buyConfig.js';
 
@@ -75,6 +75,7 @@ export function AdminOrdersPage() {
   // Rejection Modal
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [isOtsModalOpen, setIsOtsModalOpen] = useState(false);
 
   // Check-in dashboard states
   const [isCheckinMode, setIsCheckinMode] = useState(false);
@@ -652,6 +653,16 @@ export function AdminOrdersPage() {
               </>
             )}
           </div>
+
+          <button
+            onClick={() => setIsOtsModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-500 text-emerald-400 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            style={{ fontFamily: 'Montserrat, sans-serif' }}
+            title="Tambah transaksi pembelian On-The-Spot baru"
+          >
+            <Plus className="w-3.5 h-3.5" /> 
+            Tambah Order OTS
+          </button>
 
           <button
             onClick={handlePurgeProofs}
@@ -1264,8 +1275,792 @@ export function AdminOrdersPage() {
         </div>
       )}
 
+      {/* OTS PURCHASE MODAL (PORTAL OVERLAY) */}
+      <OtsOrderModal
+        isOpen={isOtsModalOpen}
+        onClose={() => setIsOtsModalOpen(false)}
+        token={token}
+        onSuccess={(msg) => {
+          setActionMessage({ type: 'success', text: msg });
+          refreshOrders();
+        }}
+      />
 
+    </div>
+  );
+}
 
+// ================= OTS ORDER MODAL COMPONENT =================
+
+interface OtsOrderModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  token: string | null;
+  onSuccess: (message: string) => void;
+}
+
+export function OtsOrderModal({ isOpen, onClose, token, onSuccess }: OtsOrderModalProps) {
+  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Contentful lists
+  const [events, setEvents] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [merchandiseList, setMerchandiseList] = useState<any[]>([]);
+  const [chekiPrices, setChekiPrices] = useState({
+    twoShot: 35000,
+    solo: 35000,
+    group: 100000
+  });
+
+  // Form inputs
+  const [buyerName, setBuyerName] = useState('Pembeli OTS');
+  const [buyerEmail, setBuyerEmail] = useState('');
+  const [buyerWhatsapp, setBuyerWhatsapp] = useState('');
+  const [buyerInstagram, setBuyerInstagram] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'QRIS'>('Cash');
+  const [notes, setNotes] = useState('');
+  const [isRedeemed, setIsRedeemed] = useState(true);
+  const [bypassQuotas, setBypassQuotas] = useState(false);
+
+  // Added items
+  const [chekiItems, setChekiItems] = useState<Array<{
+    id: string;
+    memberId: string;
+    memberName: string;
+    type: 'Solo' | 'Two Shot' | 'Group';
+    quantity: number;
+    price: number;
+  }>>([]);
+
+  const [merchItems, setMerchItems] = useState<Array<{
+    id: string;
+    merchId: string;
+    merchName: string;
+    quantity: number;
+    price: number;
+  }>>([]);
+
+  // Load Contentful database on open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setBuyerName('Pembeli OTS');
+    setBuyerEmail('');
+    setBuyerWhatsapp('');
+    setBuyerInstagram('');
+    setNotes('');
+    setPaymentMethod('Cash');
+    setIsRedeemed(true);
+    setBypassQuotas(false);
+    setChekiItems([]);
+    setMerchItems([]);
+    setError(null);
+
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const { client } = await import('../../../lib/contentful');
+
+        // Events
+        const eventsResponse = await client.getEntries({
+          content_type: 'event',
+          order: ['fields.date'],
+        });
+        const formattedEvents = eventsResponse.items.map((item: any) => {
+          const rawDate = item.fields.date;
+          let dateStr = 'TBA';
+          if (rawDate) {
+            const d = new Date(rawDate);
+            dateStr = d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+          }
+          return {
+            id: item.sys.id,
+            title: item.fields.title || 'Untitled Event',
+            date: dateStr,
+            venue: item.fields.venue || 'TBA'
+          };
+        });
+
+        const defaultEv = {
+          id: 'default',
+          title: buyConfig.eventInfo.name,
+          date: buyConfig.eventInfo.date,
+          venue: buyConfig.eventInfo.location
+        };
+        const allEvents = [defaultEv, ...formattedEvents];
+        setEvents(allEvents);
+        setSelectedEvent(defaultEv.title);
+
+        // Members
+        const membersResponse = await client.getEntries({
+          content_type: 'member',
+          order: ['fields.name'],
+        });
+        const formattedMembers = membersResponse.items.map((item: any) => ({
+          id: item.sys.id,
+          name: item.fields.name || 'Untitled Member'
+        }));
+        setMembers(formattedMembers.length > 0 ? formattedMembers : buyConfig.members);
+
+        // Products
+        const productsResponse = await client.getEntries({
+          content_type: 'product',
+          order: ['fields.name'],
+        });
+
+        const formattedMerch = productsResponse.items
+          .filter((item: any) => item.fields.category !== 'Cheki')
+          .map((item: any) => ({
+            id: item.sys.id,
+            name: item.fields.name || 'Untitled Product',
+            price: item.fields.price || 0
+          }));
+        setMerchandiseList(formattedMerch.length > 0 ? formattedMerch : buyConfig.merch);
+
+        const chekiProducts = productsResponse.items.filter((item: any) => item.fields.category === 'Cheki');
+        let contentfulTwoShot = null;
+        let contentfulSolo = null;
+        let contentfulGroup = null;
+
+        chekiProducts.forEach((item: any) => {
+          const nameLower = (item.fields.name || '').toLowerCase();
+          const priceStr = item.fields.price || '0';
+          const priceNum = typeof priceStr === 'number'
+            ? priceStr
+            : parseInt(priceStr.replace(/\D/g, ''), 10) || 0;
+
+          if (nameLower.includes('two shot') || nameLower.includes('2-shot') || nameLower.includes('2 shot') || nameLower.includes('twoshot')) {
+            contentfulTwoShot = priceNum;
+          } else if (nameLower.includes('solo')) {
+            contentfulSolo = priceNum;
+          } else if (nameLower.includes('group')) {
+            contentfulGroup = priceNum;
+          } else if (nameLower.includes('reguler') || nameLower.includes('regular') || nameLower.includes('cheki')) {
+            if (contentfulTwoShot === null) contentfulTwoShot = priceNum;
+            if (contentfulSolo === null) contentfulSolo = priceNum;
+          }
+        });
+
+        setChekiPrices({
+          twoShot: contentfulTwoShot ?? 35000,
+          solo: contentfulSolo ?? 35000,
+          group: contentfulGroup ?? 100000
+        });
+
+      } catch (err) {
+        console.error("Contentful load error in OTS modal:", err);
+        setError("Gagal mengambil data dari Contentful. Menggunakan fallback konfigurasi lokal.");
+        setEvents([
+          {
+            id: 'default',
+            title: buyConfig.eventInfo.name,
+            date: buyConfig.eventInfo.date,
+            venue: buyConfig.eventInfo.location
+          }
+        ]);
+        setSelectedEvent(buyConfig.eventInfo.name);
+        setMembers(buyConfig.members);
+        setMerchandiseList(buyConfig.merch);
+        setChekiPrices(buyConfig.chekiPrices || {
+          twoShot: 35000,
+          solo: 35000,
+          group: 100000
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [isOpen]);
+
+  const getChekiOtsPrice = (type: 'Solo' | 'Two Shot' | 'Group', pricesObj = chekiPrices) => {
+    if (type === 'Solo') return (pricesObj.solo || 35000) + 5000;
+    if (type === 'Two Shot') return (pricesObj.twoShot || 35000) + 5000;
+    return (pricesObj.group || 100000) + 5000;
+  };
+
+  const handleAddChekiRow = () => {
+    if (members.length === 0) return;
+    const defaultMember = members[0];
+    const defaultType = 'Solo';
+    const price = getChekiOtsPrice(defaultType);
+    setChekiItems(prev => [
+      ...prev,
+      {
+        id: Math.random().toString(),
+        memberId: defaultMember.id,
+        memberName: defaultMember.name,
+        type: defaultType,
+        quantity: 1,
+        price: price
+      }
+    ]);
+  };
+
+  const handleRemoveChekiRow = (id: string) => {
+    setChekiItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleChekiRowChange = (index: number, field: string, value: any) => {
+    setChekiItems(prev => {
+      const updated = [...prev];
+      const item = { ...updated[index] };
+
+      if (field === 'memberId') {
+        item.memberId = value;
+        const matchedMember = members.find(m => m.id === value);
+        item.memberName = matchedMember ? matchedMember.name : '';
+      } else if (field === 'type') {
+        item.type = value;
+        item.price = getChekiOtsPrice(value);
+      } else if (field === 'quantity') {
+        item.quantity = Math.max(1, parseInt(value, 10) || 1);
+      } else if (field === 'price') {
+        item.price = Math.max(0, parseInt(value, 10) || 0);
+      }
+
+      updated[index] = item;
+      return updated;
+    });
+  };
+
+  const handleAddMerchRow = () => {
+    if (merchandiseList.length === 0) return;
+    const defaultMerch = merchandiseList[0];
+    setMerchItems(prev => [
+      ...prev,
+      {
+        id: Math.random().toString(),
+        merchId: defaultMerch.id,
+        merchName: defaultMerch.name,
+        quantity: 1,
+        price: defaultMerch.price || 0
+      }
+    ]);
+  };
+
+  const handleRemoveMerchRow = (id: string) => {
+    setMerchItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleMerchRowChange = (index: number, field: string, value: any) => {
+    setMerchItems(prev => {
+      const updated = [...prev];
+      const item = { ...updated[index] };
+
+      if (field === 'merchId') {
+        item.merchId = value;
+        const matchedMerch = merchandiseList.find(m => m.id === value);
+        item.merchName = matchedMerch ? matchedMerch.name : '';
+        item.price = matchedMerch ? (matchedMerch.price || 0) : 0;
+      } else if (field === 'quantity') {
+        item.quantity = Math.max(1, parseInt(value, 10) || 1);
+      } else if (field === 'price') {
+        item.price = Math.max(0, parseInt(value, 10) || 0);
+      }
+
+      updated[index] = item;
+      return updated;
+    });
+  };
+
+  const totalChekiPrice = chekiItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
+  const totalMerchPrice = merchItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
+  const grandTotal = totalChekiPrice + totalMerchPrice;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!buyerName.trim()) {
+      setError("Nama pembeli wajib diisi.");
+      return;
+    }
+
+    if (chekiItems.length === 0 && merchItems.length === 0) {
+      setError("Harap pilih minimal 1 item Cheki atau Merchandise.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    const chekiList = chekiItems.map(item => ({
+      member_id: item.memberId,
+      member_name: item.memberName,
+      type: item.type,
+      quantity: item.quantity,
+      unit_price: item.price,
+      subtotal: item.quantity * item.price
+    }));
+
+    const merchList = merchItems.map(item => ({
+      merch_id: item.merchId,
+      merch_name: item.merchName,
+      quantity: item.quantity,
+      unit_price: item.price,
+      subtotal: item.quantity * item.price
+    }));
+
+    try {
+      const payload = {
+        buyer_name: buyerName.trim(),
+        buyer_email: buyerEmail.trim(),
+        buyer_whatsapp: buyerWhatsapp.trim(),
+        buyer_instagram: buyerInstagram.trim(),
+        event_name: selectedEvent,
+        cheki_items: chekiList,
+        merch_items: merchList,
+        payment_method: paymentMethod,
+        notes: notes.trim(),
+        is_redeemed: isRedeemed,
+        bypass_quotas: bypassQuotas
+      };
+
+      const res = await fetch('/api/orders/ots', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal membuat pesanan OTS.");
+      }
+
+      onSuccess(data.message || `Pesanan OTS ${data.order_id} berhasil diproses.`);
+      onClose();
+
+    } catch (err: any) {
+      console.error("OTS submit error:", err);
+      setError(err.message || "Terjadi kesalahan internal sistem saat memproses.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+      <div className="w-full max-w-4xl bg-[#152238] border border-white/10 rounded-2xl shadow-2xl overflow-hidden my-8 animate-scaleIn flex flex-col max-h-[90vh]">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-white/10 bg-black/20 shrink-0">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-black text-[#90CDF4] tracking-tight uppercase" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+              Input Transaksi OTS
+            </h2>
+            <span className="text-[10px] font-black tracking-wider px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full uppercase">
+              OTS Mode
+            </span>
+          </div>
+          <button 
+            type="button" 
+            onClick={onClose}
+            className="text-white/40 hover:text-white transition-colors cursor-pointer"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Content Body */}
+        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {error && (
+            <div className="p-4 rounded-xl border border-red-500/30 bg-red-950/20 text-red-200 text-xs font-semibold leading-relaxed flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="py-20 flex flex-col items-center justify-center gap-3 text-white/50">
+              <Loader2 className="w-8 h-8 animate-spin text-[#90CDF4]" />
+              <p className="text-xs font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>Memuat data katalog event & member...</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+              
+              {/* Left Column: Buyer details & Payment */}
+              <div className="lg:col-span-1 space-y-4">
+                <h3 className="text-xs font-black text-white/50 uppercase tracking-widest pb-1.5 border-b border-white/5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                  Detail Pembeli
+                </h3>
+
+                <div>
+                  <label className="block text-[10px] font-black text-white/60 uppercase tracking-wider mb-1.5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    Nama Lengkap <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={buyerName}
+                    onChange={e => setBuyerName(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-white/10 bg-white/5 text-white outline-none focus:border-[#90CDF4] transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-white/60 uppercase tracking-wider mb-1.5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      WhatsApp (Opsional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 0812345"
+                      value={buyerWhatsapp}
+                      onChange={e => setBuyerWhatsapp(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-white/10 bg-white/5 text-white outline-none focus:border-[#90CDF4] transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-white/60 uppercase tracking-wider mb-1.5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      Instagram (Opsional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. username"
+                      value={buyerInstagram}
+                      onChange={e => setBuyerInstagram(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-white/10 bg-white/5 text-white outline-none focus:border-[#90CDF4] transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-white/60 uppercase tracking-wider mb-1.5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    Email (Opsional)
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="buyer@gmail.com"
+                    value={buyerEmail}
+                    onChange={e => setBuyerEmail(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-white/10 bg-white/5 text-white outline-none focus:border-[#90CDF4] transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-white/60 uppercase tracking-wider mb-1.5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    Event <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={selectedEvent}
+                    onChange={e => setSelectedEvent(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-white/10 bg-[#152238] text-white outline-none focus:border-[#90CDF4] transition-all"
+                  >
+                    {events.map(ev => (
+                      <option key={ev.id} value={ev.title}>
+                        {ev.title} ({ev.venue})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-white/60 uppercase tracking-wider mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    Metode Pembayaran <span className="text-red-400">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('Cash')}
+                      className={`py-2 px-4 rounded-xl border font-bold text-xs uppercase tracking-wider transition-all text-center cursor-pointer ${
+                        paymentMethod === 'Cash' 
+                          ? 'bg-[#90CDF4]/15 border-[#90CDF4] text-[#90CDF4]' 
+                          : 'bg-white/5 border-white/10 text-white/65 hover:border-white/20'
+                      }`}
+                      style={{ fontFamily: 'Montserrat, sans-serif' }}
+                    >
+                      CASH / TUNAI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('QRIS')}
+                      className={`py-2 px-4 rounded-xl border font-bold text-xs uppercase tracking-wider transition-all text-center cursor-pointer ${
+                        paymentMethod === 'QRIS' 
+                          ? 'bg-[#90CDF4]/15 border-[#90CDF4] text-[#90CDF4]' 
+                          : 'bg-white/5 border-white/10 text-white/65 hover:border-white/20'
+                      }`}
+                      style={{ fontFamily: 'Montserrat, sans-serif' }}
+                    >
+                      QRIS / TRANSFER
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-white/60 uppercase tracking-wider mb-1.5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    Catatan Tambahan (Opsional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    placeholder="Catatan tambahan..."
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-white/10 bg-white/5 text-white outline-none focus:border-[#90CDF4] transition-all resize-none"
+                  />
+                </div>
+
+                {/* Flags switches */}
+                <div className="pt-2 space-y-3">
+                  <label className="flex items-center gap-3 select-none cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isRedeemed}
+                      onChange={e => setIsRedeemed(e.target.checked)}
+                      className="w-4 h-4 accent-emerald-500 rounded border-white/10 bg-white/5 cursor-pointer"
+                    />
+                    <div className="text-left">
+                      <span className="block text-xs font-black text-white/90" style={{ fontFamily: 'Montserrat, sans-serif' }}>Tandai Sudah Diambil</span>
+                      <span className="block text-[10px] text-white/40 font-medium">Cheki/Merchandise diserahkan langsung saat ini</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 select-none cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bypassQuotas}
+                      onChange={e => setBypassQuotas(e.target.checked)}
+                      className="w-4 h-4 accent-red-500 rounded border-white/10 bg-white/5 cursor-pointer"
+                    />
+                    <div className="text-left">
+                      <span className="block text-xs font-black text-white/90" style={{ fontFamily: 'Montserrat, sans-serif' }}>Bypass Batas Kuota</span>
+                      <span className="block text-[10px] text-white/40 font-medium">Bypass pemeriksaan stok member/event (Gunakan jika darurat)</span>
+                    </div>
+                  </label>
+                </div>
+
+              </div>
+
+              {/* Right Column: Items */}
+              <div className="lg:col-span-2 space-y-6">
+                
+                {/* Cheki Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-4 pb-1.5 border-b border-white/5">
+                    <h3 className="text-xs font-black text-[#90CDF4] uppercase tracking-widest" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      Pemesanan Cheki (Harga OTS)
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={handleAddChekiRow}
+                      className="px-3 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold text-[10px] uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
+                      style={{ fontFamily: 'Montserrat, sans-serif' }}
+                    >
+                      <Plus className="w-3 h-3" /> Tambah Cheki
+                    </button>
+                  </div>
+
+                  {chekiItems.length === 0 ? (
+                    <div className="py-8 rounded-xl border border-dashed border-white/10 text-center text-xs text-white/30 font-medium">
+                      Belum ada cheki yang ditambahkan
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {chekiItems.map((item, idx) => (
+                        <div key={item.id} className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 p-3 rounded-xl border border-white/5 bg-black/10">
+                          
+                          {/* Member */}
+                          <div className="flex-1 min-w-[120px]">
+                            <select
+                              value={item.memberId}
+                              onChange={e => handleChekiRowChange(idx, 'memberId', e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs rounded-lg border border-white/10 bg-[#152238] text-white outline-none focus:border-[#90CDF4] transition-all"
+                            >
+                              {members.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Type */}
+                          <div className="w-[100px]">
+                            <select
+                              value={item.type}
+                              onChange={e => handleChekiRowChange(idx, 'type', e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs rounded-lg border border-white/10 bg-[#152238] text-white outline-none focus:border-[#90CDF4] transition-all"
+                            >
+                              <option value="Solo">Solo</option>
+                              <option value="Two Shot">Two Shot</option>
+                              <option value="Group">Group</option>
+                            </select>
+                          </div>
+
+                          {/* Price */}
+                          <div className="w-[90px]">
+                            <input
+                              type="number"
+                              placeholder="Harga"
+                              value={item.price}
+                              onChange={e => handleChekiRowChange(idx, 'price', e.target.value)}
+                              className="w-full px-2 py-1 text-xs rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-[#90CDF4] transition-all text-right"
+                              title="Harga satuan (OTS)"
+                            />
+                          </div>
+
+                          {/* Qty */}
+                          <div className="w-[60px]">
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={e => handleChekiRowChange(idx, 'quantity', e.target.value)}
+                              className="w-full px-2 py-1 text-xs rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-[#90CDF4] transition-all text-center"
+                              title="Jumlah lembar"
+                            />
+                          </div>
+
+                          {/* Subtotal */}
+                          <div className="w-[95px] text-right font-black text-white/85 text-xs" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                            Rp {(item.quantity * item.price).toLocaleString('id-ID')}
+                          </div>
+
+                          {/* Delete */}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveChekiRow(item.id)}
+                            className="p-1.5 rounded-lg border border-white/10 hover:border-red-400 bg-white/5 hover:bg-red-950/20 text-white/40 hover:text-red-400 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Merchandise Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-4 pb-1.5 border-b border-white/5">
+                    <h3 className="text-xs font-black text-[#90CDF4] uppercase tracking-widest" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      Pemesanan Merchandise
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={handleAddMerchRow}
+                      className="px-3 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold text-[10px] uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
+                      style={{ fontFamily: 'Montserrat, sans-serif' }}
+                    >
+                      <Plus className="w-3 h-3" /> Tambah Merch
+                    </button>
+                  </div>
+
+                  {merchItems.length === 0 ? (
+                    <div className="py-8 rounded-xl border border-dashed border-white/10 text-center text-xs text-white/30 font-medium">
+                      Belum ada merchandise yang ditambahkan
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {merchItems.map((item, idx) => (
+                        <div key={item.id} className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 p-3 rounded-xl border border-white/5 bg-black/10">
+                          
+                          {/* Merch Item */}
+                          <div className="flex-1 min-w-[150px]">
+                            <select
+                              value={item.merchId}
+                              onChange={e => handleMerchRowChange(idx, 'merchId', e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs rounded-lg border border-white/10 bg-[#152238] text-white outline-none focus:border-[#90CDF4] transition-all"
+                            >
+                              {merchandiseList.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Price */}
+                          <div className="w-[95px]">
+                            <input
+                              type="number"
+                              value={item.price}
+                              onChange={e => handleMerchRowChange(idx, 'price', e.target.value)}
+                              className="w-full px-2 py-1 text-xs rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-[#90CDF4] transition-all text-right"
+                              title="Harga satuan merch"
+                            />
+                          </div>
+
+                          {/* Qty */}
+                          <div className="w-[60px]">
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={e => handleMerchRowChange(idx, 'quantity', e.target.value)}
+                              className="w-full px-2 py-1 text-xs rounded-lg border border-white/10 bg-white/5 text-white outline-none focus:border-[#90CDF4] transition-all text-center"
+                              title="Jumlah item"
+                            />
+                          </div>
+
+                          {/* Subtotal */}
+                          <div className="w-[95px] text-right font-black text-white/85 text-xs" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                            Rp {(item.quantity * item.price).toLocaleString('id-ID')}
+                          </div>
+
+                          {/* Delete */}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMerchRow(item.id)}
+                            className="p-1.5 rounded-lg border border-white/10 hover:border-red-400 bg-white/5 hover:bg-red-950/20 text-white/40 hover:text-red-400 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Summary Card */}
+                <div className="p-4 rounded-2xl border border-white/10 bg-[#152238]/60 backdrop-blur-sm space-y-2">
+                  <div className="flex items-center justify-between text-xs text-white/50 font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    <span>Subtotal Cheki (OTS):</span>
+                    <span>Rp {totalChekiPrice.toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-white/50 font-bold" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    <span>Subtotal Merchandise:</span>
+                    <span>Rp {totalMerchPrice.toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-2.5 border-t border-white/5 text-sm font-black text-[#90CDF4]" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    <span>TOTAL TRANSAKSI:</span>
+                    <span className="text-lg">Rp {grandTotal.toLocaleString('id-ID')}</span>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="pt-2 flex justify-end gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold transition-all cursor-pointer text-white"
+                    style={{ fontFamily: 'Montserrat, sans-serif' }}
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || (chekiItems.length === 0 && merchItems.length === 0)}
+                    className="px-6 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
+                    style={{ fontFamily: 'Montserrat, sans-serif' }}
+                  >
+                    {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    Simpan &amp; Proses OTS
+                  </button>
+                </div>
+
+              </div>
+
+            </form>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }
