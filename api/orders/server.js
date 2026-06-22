@@ -52,7 +52,12 @@ const getAppUrl = (req) => {
 function adminAuth(req, res, next) {
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.replace(/^Bearer /, '');
-  const adminPassword = process.env.ADMIN_PASSWORD || 'kirindayadmin';
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminPassword) {
+    return res.status(500).json({ error: "Konfigurasi server salah: ADMIN_PASSWORD belum diatur di env." });
+  }
+
   if (token === adminPassword) {
     next();
   } else {
