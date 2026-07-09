@@ -1,18 +1,61 @@
 // Cwd: d:/ProjectApp/Kirin Day Web/api/orders/server.js
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const path = require('path');
 const AdmZip = require('adm-zip');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const { supabase } = require('./supabase');
 const { sendEmail, buildHtmlEmail } = require('./email');
 const buyConfig = require('../../config/buyConfig.json');
 
+// Pre-process configurations for secure price checks
+const MERCH_PRICE_MAP = {};
+if (buyConfig.merch && Array.isArray(buyConfig.merch)) {
+  buyConfig.merch.forEach(m => {
+    MERCH_PRICE_MAP[m.id] = m.price;
+  });
+}
+
+function getChekiPrice(type) {
+  const t = (type || '').trim().toLowerCase();
+  if (t === 'two shot') return buyConfig.chekiPrices.twoShot || 0;
+  if (t === 'solo') return buyConfig.chekiPrices.solo || 0;
+  if (t === 'group') return buyConfig.chekiPrices.group || 0;
+  return 0;
+}
+
 const app = express();
 
-app.use(cors());
+// Trust proxy for rate limiter to fetch client IP through Vercel/Render proxy
+app.set('trust proxy', 1);
+
+// Enable helmet for secure headers
+app.use(helmet());
+
+// Tighten CORS
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    if (process.env.NODE_ENV !== 'production' && origin.startsWith('http://localhost:')) {
+      return callback(null, true);
+    }
+    if (process.env.APP_URL && origin.replace(/\/$/, '') === process.env.APP_URL.replace(/\/$/, '')) {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
+
 app.use(express.json());
 
 // Set up Multer for memory upload
@@ -49,6 +92,18 @@ const getAppUrl = (req) => {
 };
 
 // Admin Authorization Middleware
+// Secure comparison helper to prevent timing attacks
+function secureCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const hashA = crypto.createHash('sha256').update(a).digest();
+  const hashB = crypto.createHash('sha256').update(b).digest();
+  try {
+    return crypto.timingSafeEqual(hashA, hashB);
+  } catch (e) {
+    return false;
+  }
+}
+
 function adminAuth(req, res, next) {
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.replace(/^Bearer /, '');
@@ -58,12 +113,29 @@ function adminAuth(req, res, next) {
     return res.status(500).json({ error: "Konfigurasi server salah: ADMIN_PASSWORD belum diatur di env." });
   }
 
-  if (token === adminPassword) {
+  if (secureCompare(token, adminPassword)) {
     next();
   } else {
     res.status(401).json({ error: "Akses ditolak. Kata sandi admin salah." });
   }
 }
+
+// Rate limiters
+const orderStatusLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // Limit each IP to 30 status checks per window
+  message: { error: "Terlalu banyak permintaan cek status. Silakan coba lagi nanti." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const orderSubmitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 submissions per window
+  message: { error: "Terlalu banyak pengiriman pesanan. Silakan coba lagi beberapa saat lagi." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Generate Order ID (CK-YYYYMMDD-XXXX)
 function generateOrderId(prefix) {
@@ -92,10 +164,16 @@ app.get('/api/orders/config', (req, res) => {
 });
 
 // Route: Get order status
-app.get('/api/orders/status', async (req, res) => {
+app.get('/api/orders/status', orderStatusLimiter, async (req, res) => {
   const { id } = req.query;
   if (!id) {
     return res.status(400).json({ error: "Order ID diperlukan." });
+  }
+
+  // Sanitization and Regex check for Order ID format (e.g. CK-20260709-ABCD or OTS-20260709-ABCD)
+  const orderIdRegex = /^(CK|OTS)-\d{8}-[A-Z0-9]{4}$/;
+  if (!orderIdRegex.test(id)) {
+    return res.status(400).json({ error: "Format Order ID tidak valid." });
   }
 
   try {
@@ -117,7 +195,7 @@ app.get('/api/orders/status', async (req, res) => {
 });
 
 // Route: Submit order
-app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
+app.post('/api/orders', orderSubmitLimiter, upload.single('paymentProof'), async (req, res) => {
   try {
     const {
       buyer_name,
@@ -142,6 +220,17 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
 
     if (!file) {
       return res.status(400).json({ error: "Bukti pembayaran wajib diunggah." });
+    }
+
+    // Validate redeem method enum
+    if (!['ship', 'event'].includes(redeem_method)) {
+      return res.status(400).json({ error: "Metode pengambilan tidak valid." });
+    }
+
+    // Validate payment method enum against configured payment methods
+    const allowedPaymentMethods = buyConfig.paymentMethods.map(p => p.id);
+    if (!allowedPaymentMethods.includes(payment_method)) {
+      return res.status(400).json({ error: "Metode pembayaran tidak valid." });
     }
 
     // 2. Format Validations
@@ -187,6 +276,38 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
       merchList = typeof merch_items === 'string' ? JSON.parse(merch_items) : merch_items;
     } catch (e) {
       return res.status(400).json({ error: "Format data barang belanjaan tidak valid." });
+    }
+
+    // Validate and recalculate Cheki Items (prevent price/qty tampering)
+    if (!Array.isArray(chekiList)) {
+      return res.status(400).json({ error: "Data Cheki tidak valid." });
+    }
+    for (const item of chekiList) {
+      if (!item.quantity || !Number.isInteger(item.quantity) || item.quantity <= 0) {
+        return res.status(400).json({ error: "Kuantitas Cheki harus berupa bilangan bulat positif." });
+      }
+      const officialPrice = getChekiPrice(item.type);
+      if (officialPrice === 0) {
+        return res.status(400).json({ error: `Tipe Cheki tidak dikenal: ${item.type}` });
+      }
+      item.unit_price = officialPrice;
+      item.subtotal = item.quantity * officialPrice;
+    }
+
+    // Validate and recalculate Merch Items (prevent price/qty tampering)
+    if (!Array.isArray(merchList)) {
+      return res.status(400).json({ error: "Data Merchandise tidak valid." });
+    }
+    for (const item of merchList) {
+      if (!item.quantity || !Number.isInteger(item.quantity) || item.quantity <= 0) {
+        return res.status(400).json({ error: "Kuantitas Merchandise harus berupa bilangan bulat positif." });
+      }
+      const officialPrice = MERCH_PRICE_MAP[item.merch_id];
+      if (officialPrice === undefined) {
+        return res.status(400).json({ error: `ID Merchandise tidak dikenal: ${item.merch_id}` });
+      }
+      item.unit_price = officialPrice;
+      item.subtotal = item.quantity * officialPrice;
     }
 
     // 3. Cart Limits
@@ -345,7 +466,14 @@ app.post('/api/orders', upload.single('paymentProof'), async (req, res) => {
 
     // 7. Upload to Supabase Storage
     const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'payment-proofs';
-    const ext = path.extname(file.originalname) || '.jpg';
+    const MIME_TO_EXT = {
+      'image/jpeg': '.jpg',
+      'image/jpg': '.jpg',
+      'image/png': '.png',
+      'image/webp': '.webp',
+      'application/pdf': '.pdf'
+    };
+    const ext = MIME_TO_EXT[file.mimetype] || '.jpg';
     const storagePath = `proofs/${orderId}-${Date.now()}${ext}`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -567,6 +695,38 @@ app.post('/api/orders/ots', adminAuth, async (req, res) => {
       merchList = typeof merch_items === 'string' ? JSON.parse(merch_items) : (merch_items || []);
     } catch (e) {
       return res.status(400).json({ error: "Format data barang belanjaan tidak valid." });
+    }
+
+    // Validate and recalculate Cheki Items (prevent price/qty tampering in OTS)
+    if (!Array.isArray(chekiList)) {
+      return res.status(400).json({ error: "Data Cheki tidak valid." });
+    }
+    for (const item of chekiList) {
+      if (!item.quantity || !Number.isInteger(item.quantity) || item.quantity <= 0) {
+        return res.status(400).json({ error: "Kuantitas Cheki harus berupa bilangan bulat positif." });
+      }
+      const officialPrice = getChekiPrice(item.type);
+      if (officialPrice === 0) {
+        return res.status(400).json({ error: `Tipe Cheki tidak dikenal: ${item.type}` });
+      }
+      item.unit_price = officialPrice;
+      item.subtotal = item.quantity * officialPrice;
+    }
+
+    // Validate and recalculate Merch Items (prevent price/qty tampering in OTS)
+    if (!Array.isArray(merchList)) {
+      return res.status(400).json({ error: "Data Merchandise tidak valid." });
+    }
+    for (const item of merchList) {
+      if (!item.quantity || !Number.isInteger(item.quantity) || item.quantity <= 0) {
+        return res.status(400).json({ error: "Kuantitas Merchandise harus berupa bilangan bulat positif." });
+      }
+      const officialPrice = MERCH_PRICE_MAP[item.merch_id];
+      if (officialPrice === undefined) {
+        return res.status(400).json({ error: `ID Merchandise tidak dikenal: ${item.merch_id}` });
+      }
+      item.unit_price = officialPrice;
+      item.subtotal = item.quantity * officialPrice;
     }
 
     const totalChekiCount = chekiList.reduce((sum, item) => sum + item.quantity, 0);
@@ -819,8 +979,11 @@ app.get('/api/orders', adminAuth, async (req, res) => {
 
     // Search term
     if (search) {
-      // In Supabase we can use or for searching across multiple columns
-      query = query.or(`order_id.ilike.%${search}%,buyer_name.ilike.%${search}%,buyer_email.ilike.%${search}%`);
+      // Sanitize special characters to prevent PostgREST syntax injection/errors
+      const cleanSearch = String(search).trim().replace(/[(),.:%]/g, '');
+      if (cleanSearch) {
+        query = query.or(`order_id.ilike.%${cleanSearch}%,buyer_name.ilike.%${cleanSearch}%,buyer_email.ilike.%${cleanSearch}%`);
+      }
     }
 
     // Pagination & Sort
@@ -985,17 +1148,55 @@ app.get('/api/orders/backup-zip', adminAuth, async (req, res) => {
       }
 
       try {
-        const response = await fetch(order.payment_proof_url);
+        const proofUrlStr = order.payment_proof_url;
+        
+        // SSRF Mitigation: Validate URL and host whitelist
+        const parsedUrl = new URL(proofUrlStr);
+        if (parsedUrl.protocol !== 'https:') {
+          console.warn(`SSRF Prevention: Non-HTTPS URL rejected: ${proofUrlStr}`);
+          continue;
+        }
+
+        // Host validation
+        const allowedHostSuffix = '.supabase.co';
+        let isHostAllowed = false;
+        
+        if (process.env.SUPABASE_URL) {
+          try {
+            const allowedHost = new URL(process.env.SUPABASE_URL).hostname;
+            if (parsedUrl.hostname === allowedHost) {
+              isHostAllowed = true;
+            }
+          } catch(e) {}
+        }
+        
+        if (parsedUrl.hostname.endsWith(allowedHostSuffix)) {
+          isHostAllowed = true;
+        }
+
+        if (!isHostAllowed) {
+          console.warn(`SSRF Prevention: URL hostname not allowed: ${parsedUrl.hostname}`);
+          continue;
+        }
+
+        // Zip Slip / Path Traversal Mitigation: Validate order_id format
+        const orderIdRegex = /^(CK|OTS)-\d{8}-[A-Z0-9]{4}$/;
+        if (!orderIdRegex.test(order.order_id)) {
+          console.warn(`Zip Generation: Invalid order ID skipped: ${order.order_id}`);
+          continue;
+        }
+
+        const response = await fetch(proofUrlStr);
         if (response.ok) {
           const arrayBuffer = await response.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
 
           let ext = '.jpg';
-          if (order.payment_proof_url.toLowerCase().endsWith('.pdf')) {
+          if (proofUrlStr.toLowerCase().endsWith('.pdf')) {
             ext = '.pdf';
-          } else if (order.payment_proof_url.toLowerCase().endsWith('.png')) {
+          } else if (proofUrlStr.toLowerCase().endsWith('.png')) {
             ext = '.png';
-          } else if (order.payment_proof_url.toLowerCase().endsWith('.webp')) {
+          } else if (proofUrlStr.toLowerCase().endsWith('.webp')) {
             ext = '.webp';
           }
 
