@@ -692,18 +692,19 @@ export function MemoryBoothPage() {
   // MediaRecorder canvas loop animation
   const recordVideoStrip = async () => {
     const isStory = exportMode === 'story';
+    const scale = 0.5; // Scale down for mobile smoothness and lightweight encoding
 
     // 1. Main recording canvas
     const recordingCanvas = document.createElement('canvas');
-    recordingCanvas.width = isStory ? 1080 : config.width;
-    recordingCanvas.height = isStory ? 1920 : config.height;
+    recordingCanvas.width = (isStory ? 1080 : config.width) * scale;
+    recordingCanvas.height = (isStory ? 1920 : config.height) * scale;
     const recordingCtx = recordingCanvas.getContext('2d');
     if (!recordingCtx) throw new Error("Recording canvas context construction failed");
 
     // Hidden strip canvas (used if exportMode === 'story' to compile the strip first)
     const stripCanvas = isStory ? document.createElement('canvas') : recordingCanvas;
-    stripCanvas.width = config.width;
-    stripCanvas.height = config.height;
+    stripCanvas.width = config.width * scale;
+    stripCanvas.height = config.height * scale;
     const stripCtx = stripCanvas.getContext('2d');
     if (!stripCtx) throw new Error("Strip canvas context construction failed");
 
@@ -811,10 +812,19 @@ export function MemoryBoothPage() {
     // Render loop function
     let animId: number;
     let lastSegment = -1;
+    let lastDrawTime = 0;
     const recordStart = performance.now();
 
     const renderLoop = () => {
-      const elapsed = (performance.now() - recordStart) / 1000;
+      const now = performance.now();
+      const elapsedSinceLastDraw = now - lastDrawTime;
+      if (elapsedSinceLastDraw < 33.33) { // Throttle rendering to ~30 FPS (saves CPU/GPU overhead)
+        animId = requestAnimationFrame(renderLoop);
+        return;
+      }
+      lastDrawTime = now - (elapsedSinceLastDraw % 33.33);
+
+      const elapsed = (now - recordStart) / 1000;
       const t = Math.min(elapsed, 12);
       const currentSegment = Math.min(3, Math.floor(t / 3)); // 0 to 3
 
@@ -830,20 +840,24 @@ export function MemoryBoothPage() {
 
       // Handle play/pause transitions when crossing 3-second boundaries
       if (currentSegment !== lastSegment) {
-        vids.forEach(v => v.pause());
+        // 1. Pause all other (inactive) videos
+        vids.forEach((v, idx) => {
+          if (idx !== activeIdx) {
+            v.pause();
+            const start = slots[idx]?.startTime || 0;
+            v.currentTime = start;
+          }
+        });
+
+        // 2. Manage the active video
         const activeVideo = videoRefs.current[activeIdx];
         if (activeVideo) {
           const start = slots[activeIdx]?.startTime || 0;
           activeVideo.currentTime = start;
-          activeVideo.play().catch(e => console.log("Video auto playback failed:", e));
-        }
-        // Seek all inactive videos back to start frame to draw them frozen
-        slots.forEach((s, idx) => {
-          if (idx !== activeIdx) {
-            const v = videoRefs.current[idx];
-            if (v) v.currentTime = s.startTime || 0;
+          if (activeVideo.paused) {
+            activeVideo.play().catch(e => console.log("Video auto playback failed:", e));
           }
-        });
+        }
         lastSegment = currentSegment;
       }
 
@@ -853,19 +867,23 @@ export function MemoryBoothPage() {
         recordingCtx.clearRect(0, 0, recordingCanvas.width, recordingCanvas.height);
       }
 
+      // Draw onto strip canvas with 0.5x scale factor
+      stripCtx.save();
+      stripCtx.scale(scale, scale);
+
       // 1. Draw Background
       if (isContentfulTheme) {
         stripCtx.fillStyle = activeTheme.bgColor;
-        stripCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
+        stripCtx.fillRect(0, 0, config.width, config.height);
       } else if (theme === 'blossom') {
-        const grad = stripCtx.createLinearGradient(0, 0, 0, stripCanvas.height);
+        const grad = stripCtx.createLinearGradient(0, 0, 0, config.height);
         grad.addColorStop(0, '#FFD3E8');
         grad.addColorStop(1, '#D6E4FF');
         stripCtx.fillStyle = grad;
-        stripCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
+        stripCtx.fillRect(0, 0, config.width, config.height);
       } else {
         stripCtx.fillStyle = activeTheme.bgColor;
-        stripCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
+        stripCtx.fillRect(0, 0, config.width, config.height);
       }
 
       // 2. Draw active/frozen video frames in slots
@@ -932,11 +950,16 @@ export function MemoryBoothPage() {
 
       // 3. Draw pre-loaded overlay PNG frame on top
       if (overlayImg) {
-        stripCtx.drawImage(overlayImg, 0, 0, stripCanvas.width, stripCanvas.height);
+        stripCtx.drawImage(overlayImg, 0, 0, config.width, config.height);
       }
+
+      stripCtx.restore(); // Restore scaled context of strip canvas
 
       // 4. If in Story mode, composite the strip onto the Story template
       if (isStory) {
+        recordingCtx.save();
+        recordingCtx.scale(scale, scale);
+
         if (storyBgImg) {
           recordingCtx.drawImage(storyBgImg, 0, 0, 1080, 1920);
         } else {
@@ -951,6 +974,8 @@ export function MemoryBoothPage() {
         recordingCtx.shadowOffsetX = 0;
         recordingCtx.shadowOffsetY = 8;
         recordingCtx.drawImage(stripCanvas, placement.x, placement.y, placement.width, placement.height);
+        recordingCtx.restore();
+
         recordingCtx.restore();
       }
 
