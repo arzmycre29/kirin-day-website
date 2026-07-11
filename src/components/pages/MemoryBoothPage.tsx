@@ -1247,15 +1247,25 @@ export function MemoryBoothPage() {
                       : 'bg-white/5 border-white/10 hover:border-white/20'
                   }`}
                 >
-                  <div 
-                    className="w-12 h-16 rounded-md mb-3 border border-white/10 flex flex-col justify-between p-1.5"
-                    style={{ background: t.bgColor }}
-                  >
-                    <div className="flex flex-col gap-1">
-                      <div className="w-full h-2.5 bg-black/10 rounded-xs" />
-                      <div className="w-full h-2.5 bg-black/10 rounded-xs" />
-                    </div>
-                    <div className="w-full h-1 bg-black/20 rounded-full" />
+                  <div className="w-16 h-24 rounded-md mb-3 border border-white/10 bg-black/20 flex items-center justify-center overflow-hidden p-1 select-none">
+                    {t.imageUrl ? (
+                      <img 
+                        src={t.imageUrl} 
+                        alt={t.name} 
+                        className="w-full h-full object-contain pointer-events-none" 
+                      />
+                    ) : (
+                      <div 
+                        className="w-full h-full flex flex-col justify-between p-1.5 rounded"
+                        style={{ background: t.bgColor }}
+                      >
+                        <div className="flex flex-col gap-1">
+                          <div className="w-full h-2 bg-black/10 rounded-xs" />
+                          <div className="w-full h-2 bg-black/10 rounded-xs" />
+                        </div>
+                        <div className="w-full h-1 bg-black/20 rounded-full" />
+                      </div>
+                    )}
                   </div>
                   <span className="font-bold text-sm">{t.name}</span>
                 </div>
