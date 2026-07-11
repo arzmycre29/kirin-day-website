@@ -744,6 +744,32 @@ export function MemoryBoothPage() {
       v.currentTime = start;
     });
 
+    // Wait 600ms for seeking and frame decoding to fully complete in the browser
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    // Pre-cache static starting frame canvases for each slot to use as poster frames
+    const posterCanvases: HTMLCanvasElement[] = [];
+    for (let i = 0; i < config.slots.length; i++) {
+      const video = videoRefs.current[i];
+      const pCanvas = document.createElement('canvas');
+      if (video && slots[i]?.url) {
+        pCanvas.width = video.videoWidth || 640;
+        pCanvas.height = video.videoHeight || 480;
+        const pCtx = pCanvas.getContext('2d');
+        if (pCtx) {
+          try {
+            pCtx.drawImage(video, 0, 0, pCanvas.width, pCanvas.height);
+          } catch (e) {
+            console.warn("Failed to capture poster frame for slot:", i, e);
+          }
+        }
+      } else {
+        pCanvas.width = 100;
+        pCanvas.height = 100;
+      }
+      posterCanvases.push(pCanvas);
+    }
+
     // Canvas stream & recorder setup
     const stream = recordingCanvas.captureStream(30); // 30 fps
     
@@ -848,7 +874,16 @@ export function MemoryBoothPage() {
         const slotState = slots[i];
         const video = videoRefs.current[i];
 
-        if (slotState.url && video && video.readyState >= 2) {
+        const isSlotActive = i === activeIdx;
+        const isVideoReady = video && video.readyState >= 2 && !video.seeking;
+        
+        // Dynamic source media: draw the live playing video if active and ready,
+        // otherwise draw the static pre-cached poster canvas (prevents black/seeking frames)
+        const sourceMedia = (isSlotActive && isVideoReady) ? video : posterCanvases[i];
+        const imgW = (isSlotActive && isVideoReady) ? video.videoWidth : posterCanvases[i].width;
+        const imgH = (isSlotActive && isVideoReady) ? video.videoHeight : posterCanvases[i].height;
+
+        if (slotState.url && sourceMedia) {
           stripCtx.save();
           stripCtx.beginPath();
           stripCtx.rect(slot.x, slot.y, slot.w, slot.h);
@@ -856,7 +891,7 @@ export function MemoryBoothPage() {
 
           // Cover calculations
           const slotAspect = slot.w / slot.h;
-          const videoAspect = video.videoWidth / video.videoHeight;
+          const videoAspect = imgW / imgH;
           let drawW = slot.w;
           let drawH = slot.h;
 
@@ -883,7 +918,7 @@ export function MemoryBoothPage() {
           }
 
           stripCtx.drawImage(
-            video,
+            sourceMedia,
             -drawW / 2 + slotState.offsetX,
             -drawH / 2 + slotState.offsetY,
             drawW,
