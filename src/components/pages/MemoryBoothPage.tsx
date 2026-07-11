@@ -120,6 +120,7 @@ export function MemoryBoothPage() {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [exportMode, setExportMode] = useState<'story' | 'strip'>('story'); // 'story' (9:16) or 'strip' (exact frame size)
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
+  const [recordedMimeType, setRecordedMimeType] = useState<string>('video/webm');
 
   // Trimming State
   const [trimModalOpen, setTrimModalOpen] = useState(false);
@@ -690,12 +691,21 @@ export function MemoryBoothPage() {
 
   // MediaRecorder canvas loop animation
   const recordVideoStrip = async () => {
-    // 1. Create drawing canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = config.width;
-    canvas.height = config.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error("Canvas context construction failed");
+    const isStory = exportMode === 'story';
+
+    // 1. Main recording canvas
+    const recordingCanvas = document.createElement('canvas');
+    recordingCanvas.width = isStory ? 1080 : config.width;
+    recordingCanvas.height = isStory ? 1920 : config.height;
+    const recordingCtx = recordingCanvas.getContext('2d');
+    if (!recordingCtx) throw new Error("Recording canvas context construction failed");
+
+    // Hidden strip canvas (used if exportMode === 'story' to compile the strip first)
+    const stripCanvas = isStory ? document.createElement('canvas') : recordingCanvas;
+    stripCanvas.width = config.width;
+    stripCanvas.height = config.height;
+    const stripCtx = stripCanvas.getContext('2d');
+    if (!stripCtx) throw new Error("Strip canvas context construction failed");
 
     // Let's load the video elements
     const vids = videoRefs.current.filter(v => v !== null) as HTMLVideoElement[];
@@ -716,26 +726,52 @@ export function MemoryBoothPage() {
       console.error("Error pre-loading overlay image for video recording:", err);
     }
 
-    // Reset video playbacks
-    vids.forEach((v, i) => {
-      const start = slots[i]?.startTime || 0;
+    // Pre-load background for Story if needed
+    let storyBgImg: HTMLImageElement | null = null;
+    const placement = STORY_PLACEMENTS[layout];
+    if (isStory) {
+      try {
+        storyBgImg = await loadImage(placement.bg);
+      } catch (err) {
+        console.error("Failed to load story background image:", err);
+      }
+    }
+
+    // Pause all videos and seek to their starting frames
+    vids.forEach((v, idx) => {
+      v.pause();
+      const start = slots[idx]?.startTime || 0;
       v.currentTime = start;
-      v.play().catch(e => console.log("Video auto play failed:", e));
     });
 
-    // Canvas stream & recorder
-    const stream = canvas.captureStream(30); // 30 fps
+    // Canvas stream & recorder setup
+    const stream = recordingCanvas.captureStream(30); // 30 fps
     
-    // Choose mimetype
-    let options = { mimeType: 'video/webm;codecs=vp9' };
+    // Choose mimetype prioritizing MP4
+    let options: MediaRecorderOptions = {};
+    if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264')) {
+      options = { mimeType: 'video/mp4;codecs=h264' };
+    } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+      options = { mimeType: 'video/mp4' };
+    } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+      options = { mimeType: 'video/webm;codecs=vp9' };
+    } else if (MediaRecorder.isTypeSupported('video/webm')) {
+      options = { mimeType: 'video/webm' };
+    }
+
+    const selectedMime = options.mimeType || 'video/webm';
+    setRecordedMimeType(selectedMime);
+
     let recorder: MediaRecorder;
     try {
       recorder = new MediaRecorder(stream, options);
     } catch (e) {
       try {
         recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        setRecordedMimeType('video/webm');
       } catch (e2) {
         recorder = new MediaRecorder(stream);
+        setRecordedMimeType('video/webm');
       }
     }
 
@@ -748,45 +784,75 @@ export function MemoryBoothPage() {
 
     // Render loop function
     let animId: number;
+    let lastSegment = -1;
+    const recordStart = performance.now();
 
     const renderLoop = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const elapsed = (performance.now() - recordStart) / 1000;
+      const t = Math.min(elapsed, 12);
+      const currentSegment = Math.min(3, Math.floor(t / 3)); // 0 to 3
+
+      // Active video slot based on current time segment (looping sequentially)
+      let activeIdx = 0;
+      if (layout === '4s') {
+        activeIdx = currentSegment;
+      } else if (layout === '2s') {
+        activeIdx = currentSegment % 2;
+      } else if (layout === '1s') {
+        activeIdx = 0;
+      }
+
+      // Handle play/pause transitions when crossing 3-second boundaries
+      if (currentSegment !== lastSegment) {
+        vids.forEach(v => v.pause());
+        const activeVideo = videoRefs.current[activeIdx];
+        if (activeVideo) {
+          const start = slots[activeIdx]?.startTime || 0;
+          activeVideo.currentTime = start;
+          activeVideo.play().catch(e => console.log("Video auto playback failed:", e));
+        }
+        // Seek all inactive videos back to start frame to draw them frozen
+        slots.forEach((s, idx) => {
+          if (idx !== activeIdx) {
+            const v = videoRefs.current[idx];
+            if (v) v.currentTime = s.startTime || 0;
+          }
+        });
+        lastSegment = currentSegment;
+      }
+
+      // Clear canvases
+      stripCtx.clearRect(0, 0, stripCanvas.width, stripCanvas.height);
+      if (isStory) {
+        recordingCtx.clearRect(0, 0, recordingCanvas.width, recordingCanvas.height);
+      }
 
       // 1. Draw Background
       if (isContentfulTheme) {
-        ctx.fillStyle = activeTheme.bgColor;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        stripCtx.fillStyle = activeTheme.bgColor;
+        stripCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
       } else if (theme === 'blossom') {
-        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        const grad = stripCtx.createLinearGradient(0, 0, 0, stripCanvas.height);
         grad.addColorStop(0, '#FFD3E8');
         grad.addColorStop(1, '#D6E4FF');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        stripCtx.fillStyle = grad;
+        stripCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
       } else {
-        ctx.fillStyle = activeTheme.bgColor;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        stripCtx.fillStyle = activeTheme.bgColor;
+        stripCtx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
       }
 
-      // 2. Draw active video frames in slots
+      // 2. Draw active/frozen video frames in slots
       for (let i = 0; i < config.slots.length; i++) {
         const slot = config.slots[i];
         const slotState = slots[i];
         const video = videoRefs.current[i];
 
         if (slotState.url && video && video.readyState >= 2) {
-          // Keep video within trimmed duration during capture
-          const start = slotState.startTime || 0;
-          if (video.currentTime >= start + 3) {
-            video.currentTime = start;
-          }
-          if (video.currentTime < start) {
-            video.currentTime = start;
-          }
-
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(slot.x, slot.y, slot.w, slot.h);
-          ctx.clip();
+          stripCtx.save();
+          stripCtx.beginPath();
+          stripCtx.rect(slot.x, slot.y, slot.w, slot.h);
+          stripCtx.clip();
 
           // Cover calculations
           const slotAspect = slot.w / slot.h;
@@ -804,19 +870,19 @@ export function MemoryBoothPage() {
 
           const centerX = slot.x + slot.w / 2;
           const centerY = slot.y + slot.h / 2;
-          ctx.translate(centerX, centerY);
-          ctx.rotate((slotState.rotation * Math.PI) / 180);
-          ctx.scale(slotState.zoom, slotState.zoom);
+          stripCtx.translate(centerX, centerY);
+          stripCtx.rotate((slotState.rotation * Math.PI) / 180);
+          stripCtx.scale(slotState.zoom, slotState.zoom);
 
           // Apply filters
           if (slotState.filter !== 'none') {
             const filterDef = FILTERS.find(f => f.id === slotState.filter);
             if (filterDef && filterDef.css) {
-              ctx.filter = filterDef.css;
+              stripCtx.filter = filterDef.css;
             }
           }
 
-          ctx.drawImage(
+          stripCtx.drawImage(
             video,
             -drawW / 2 + slotState.offsetX,
             -drawH / 2 + slotState.offsetY,
@@ -824,107 +890,34 @@ export function MemoryBoothPage() {
             drawH
           );
 
-          ctx.filter = 'none';
-          ctx.restore();
+          stripCtx.filter = 'none';
+          stripCtx.restore();
         }
       }
 
       // 3. Draw pre-loaded overlay PNG frame on top
       if (overlayImg) {
-        ctx.drawImage(overlayImg, 0, 0, canvas.width, canvas.height);
+        stripCtx.drawImage(overlayImg, 0, 0, stripCanvas.width, stripCanvas.height);
       }
 
-      // 4. Draw Custom Theme borders and decals (only for local themes!)
-      if (!isContentfulTheme) {
-        config.slots.forEach(slot => {
-          ctx.save();
-          if (theme === 'signature') {
-            ctx.strokeStyle = '#F6E05E';
-            ctx.lineWidth = 6;
-            ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
-          } else if (theme === 'blossom') {
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 6;
-            ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
-          } else if (theme === 'neon') {
-            ctx.strokeStyle = '#ff007f';
-            ctx.shadowColor = '#ff007f';
-            ctx.shadowBlur = 10;
-            ctx.lineWidth = 2;
-            ctx.strokeRect(slot.x - 3, slot.y - 3, slot.w + 6, slot.h + 6);
-            ctx.strokeStyle = '#00f0ff';
-            ctx.shadowColor = '#00f0ff';
-            ctx.shadowBlur = 15;
-            ctx.lineWidth = 5;
-            ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
-          } else if (theme === 'filmstrip') {
-            ctx.strokeStyle = '#222222';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
-          }
-          ctx.restore();
-        });
-
-        // Draw Decals
-        ctx.save();
-        if (theme === 'signature') {
-          ctx.fillStyle = '#F6E05E';
-          const drawStarDecal = (cx: number, cy: number, r: number) => {
-            ctx.beginPath();
-            for (let i = 0; i < 5; i++) {
-              ctx.lineTo(cx + Math.cos((18 + i * 72) * Math.PI / 180) * r, cy - Math.sin((18 + i * 72) * Math.PI / 180) * r);
-              ctx.lineTo(cx + Math.cos((54 + i * 72) * Math.PI / 180) * (r/2), cy - Math.sin((54 + i * 72) * Math.PI / 180) * (r/2));
-            }
-            ctx.closePath();
-            ctx.fill();
-          };
-          drawStarDecal(35, canvas.height - 162, 14);
-          drawStarDecal(canvas.width - 35, canvas.height - 162, 14);
-        } else if (theme === 'blossom') {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-          const drawCloud = (cx: number, cy: number, r: number) => {
-            ctx.beginPath();
-            ctx.arc(cx, cy, r, 0, Math.PI * 2);
-            ctx.arc(cx + r * 0.7, cy - r * 0.2, r * 0.8, 0, Math.PI * 2);
-            ctx.arc(cx - r * 0.7, cy - r * 0.1, r * 0.7, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.fill();
-          };
-          drawCloud(70, canvas.height - 162, 25);
-          drawCloud(canvas.width - 80, canvas.height - 200, 20);
-        } else if (theme === 'filmstrip') {
-          ctx.fillStyle = '#222222';
-          for (let sy = 25; sy < canvas.height - 25; sy += 85) {
-            ctx.fillRect(15, sy, 18, 30);
-            ctx.fillRect(canvas.width - 33, sy, 18, 30);
-          }
-        } else if (theme === 'neon') {
-          ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
-          for (let gx = 20; gx < canvas.width; gx += 40) {
-            ctx.fillRect(gx, canvas.height - 280, 2, 2);
-            ctx.fillRect(gx, canvas.height - 80, 2, 2);
-          }
+      // 4. If in Story mode, composite the strip onto the Story template
+      if (isStory) {
+        if (storyBgImg) {
+          recordingCtx.drawImage(storyBgImg, 0, 0, 1080, 1920);
+        } else {
+          recordingCtx.fillStyle = '#dfd9be';
+          recordingCtx.fillRect(0, 0, 1080, 1920);
         }
-        ctx.restore();
-      }
 
-      // 5. Draw Texts
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = activeTheme.textColor;
-      ctx.font = 'bold 36px Montserrat, sans-serif';
-      const textY = canvas.height - 162;
-      ctx.fillText(customText.toUpperCase(), canvas.width / 2, textY - (showDate ? 20 : 0));
-
-      if (showDate) {
-        const today = new Date();
-        const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
-        ctx.font = '500 20px Montserrat, sans-serif';
-        ctx.fillStyle = theme === 'default' ? '#718096' : activeTheme.textColor + 'cc';
-        ctx.fillText(formattedDate, canvas.width / 2, textY + 30);
+        // Draw strip on top with shadow
+        recordingCtx.save();
+        recordingCtx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+        recordingCtx.shadowBlur = 24;
+        recordingCtx.shadowOffsetX = 0;
+        recordingCtx.shadowOffsetY = 8;
+        recordingCtx.drawImage(stripCanvas, placement.x, placement.y, placement.width, placement.height);
+        recordingCtx.restore();
       }
-      ctx.restore();
 
       // Record frames
       animId = requestAnimationFrame(renderLoop);
@@ -934,8 +927,8 @@ export function MemoryBoothPage() {
     renderLoop();
     recorder.start();
 
-    // Record for exactly 3 seconds
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Record for exactly 12 seconds
+    await new Promise(resolve => setTimeout(resolve, 12000));
 
     // Stop recorder & loop
     recorder.stop();
@@ -945,8 +938,7 @@ export function MemoryBoothPage() {
     // Construct resulting blob URL
     return new Promise<void>((resolve) => {
       recorder.onstop = () => {
-        // Use standard WebM format
-        const blob = new Blob(chunks, { type: 'video/webm' });
+        const blob = new Blob(chunks, { type: selectedMime });
         const finalUrl = URL.createObjectURL(blob);
         setGeneratedUrl(finalUrl);
         setStep('preview');
@@ -959,7 +951,11 @@ export function MemoryBoothPage() {
     if (!generatedUrl) return;
     const a = document.createElement('a');
     a.href = generatedUrl;
-    a.download = `kirinday_memory_${layout}_${mediaMode === 'photo' ? 'strip.jpg' : 'video.webm'}`;
+    
+    // Choose dynamic file extension based on media mode and actual recorded mimeType
+    const ext = mediaMode === 'photo' ? 'jpg' : (recordedMimeType.includes('mp4') ? 'mp4' : 'webm');
+    a.download = `kirinday_memory_${layout}_${mediaMode === 'photo' ? 'strip' : 'video'}.${ext}`;
+    
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -970,8 +966,10 @@ export function MemoryBoothPage() {
     slots.forEach(slot => {
       if (slot.url) URL.revokeObjectURL(slot.url);
     });
-    setStep('layout');
+    setSlots([]);
+    setActiveSlotIndex(null);
     setGeneratedUrl(null);
+    setStep('layout');
   };
 
   return (
@@ -1550,39 +1548,37 @@ export function MemoryBoothPage() {
               </p>
               
               {/* Option to select export canvas size */}
-              {mediaMode === 'photo' && (
-                <div className="bg-white/5 p-3 rounded-lg border border-white/10 mb-6 text-left">
-                  <span className="text-xs font-bold block mb-2 text-[#F6E05E]">Format Unduhan:</span>
-                  <div className="flex flex-col gap-2">
-                    <label className="flex items-center gap-2.5 text-xs cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="exportMode" 
-                        checked={exportMode === 'story'} 
-                        onChange={() => setExportMode('story')}
-                        className="accent-[#F6E05E]" 
-                      />
-                      <div>
-                        <span className="font-bold block text-white/90">Instagram Story (9:16)</span>
-                        <span className="text-white/40 block text-[10px]">Untuk langsung di-share di Story</span>
-                      </div>
-                    </label>
-                    <label className="flex items-center gap-2.5 text-xs cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="exportMode" 
-                        checked={exportMode === 'strip'} 
-                        onChange={() => setExportMode('strip')}
-                        className="accent-[#F6E05E]" 
-                      />
-                      <div>
-                        <span className="font-bold block text-white/90">Strip Saja (Sesuai Ukuran Asli)</span>
-                        <span className="text-white/40 block text-[10px]">Cocok untuk cetak fisik / wallpaper</span>
-                      </div>
-                    </label>
-                  </div>
+              <div className="bg-white/5 p-3 rounded-lg border border-white/10 mb-6 text-left">
+                <span className="text-xs font-bold block mb-2 text-[#F6E05E]">Format Unduhan:</span>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2.5 text-xs cursor-pointer">
+                    <input 
+                      type="radio" 
+                      name="exportMode" 
+                      checked={exportMode === 'story'} 
+                      onChange={() => setExportMode('story')}
+                      className="accent-[#F6E05E]" 
+                    />
+                    <div>
+                      <span className="font-bold block text-white/90">Instagram Story (9:16)</span>
+                      <span className="text-white/40 block text-[10px]">Untuk langsung di-share di Story</span>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-2.5 text-xs cursor-pointer">
+                    <input 
+                      type="radio" 
+                      name="exportMode" 
+                      checked={exportMode === 'strip'} 
+                      onChange={() => setExportMode('strip')}
+                      className="accent-[#F6E05E]" 
+                    />
+                    <div>
+                      <span className="font-bold block text-white/90">Strip Saja (Sesuai Ukuran Asli)</span>
+                      <span className="text-white/40 block text-[10px]">Cocok untuk cetak fisik / wallpaper</span>
+                    </div>
+                  </label>
                 </div>
-              )}
+              </div>
 
               <div className="flex gap-3">
                 <button
