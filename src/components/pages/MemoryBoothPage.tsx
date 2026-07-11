@@ -1335,8 +1335,8 @@ export function MemoryBoothPage() {
                       onClick={() => setActiveSlotIndex(idx)}
                       onMouseDown={(e) => handleDragStart(e, idx)}
                       onTouchStart={(e) => handleDragStart(e, idx)}
-                      className={`absolute cursor-move border-2 transition-colors ${
-                        isCurrent ? 'border-[#F6E05E] overflow-visible z-40 shadow-[0_0_20px_rgba(246,224,94,0.4)]' : 'overflow-hidden border-transparent z-10'
+                      className={`absolute overflow-hidden cursor-move border-2 transition-colors z-10 ${
+                        isCurrent ? 'border-[#F6E05E] shadow-[0_0_20px_rgba(246,224,94,0.4)]' : 'border-transparent'
                       } ${!state.url ? 'bg-white/5 border-dashed border-white/20 hover:bg-white/10' : ''}`}
                       style={{
                         left: `${pLeft}%`,
@@ -1363,6 +1363,8 @@ export function MemoryBoothPage() {
                       {/* Slot Content */}
                       {state.url ? (
                         <div className="w-full h-full relative pointer-events-none">
+                          {/* Dark bg shows crop boundary area outside the media */}
+                          {isCurrent && <div className="absolute inset-0 bg-black/40 z-0" />}
                           {state.type === 'video' ? (
                             <video 
                               ref={el => { videoRefs.current[idx] = el; }}
@@ -1379,7 +1381,9 @@ export function MemoryBoothPage() {
                                   e.currentTarget.currentTime = start;
                                 }
                               }}
-                              className="w-full h-full object-cover origin-center"
+                              className={`w-full h-full origin-center relative z-10 ${
+                                isCurrent ? 'object-contain' : 'object-cover'
+                              }`}
                               style={{
                                 transform: `translate(${state.offsetX}px, ${state.offsetY}px) rotate(${state.rotation}deg) scale(${state.zoom})`,
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
@@ -1389,7 +1393,9 @@ export function MemoryBoothPage() {
                             <img 
                               src={state.url}
                               alt={`Slot ${idx + 1}`}
-                              className="w-full h-full object-cover origin-center"
+                              className={`w-full h-full origin-center relative z-10 ${
+                                isCurrent ? 'object-contain' : 'object-cover'
+                              }`}
                               style={{
                                 transform: `translate(${state.offsetX}px, ${state.offsetY}px) rotate(${state.rotation}deg) scale(${state.zoom})`,
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
