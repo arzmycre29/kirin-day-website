@@ -1017,7 +1017,12 @@ export function MemoryBoothPage() {
             <div className="w-full md:w-auto flex-shrink-0 flex flex-col items-center justify-center self-center md:self-auto">
               <div 
                 ref={previewContainerRef}
-                className="relative select-none overflow-hidden aspect-[9/16] bg-[#1a2f47] w-[300px] md:w-[360px] shadow-2xl rounded-2xl border border-white/10 flex flex-col items-center justify-center"
+                className={`relative select-none overflow-hidden bg-[#1a2f47] shadow-2xl rounded-2xl border border-white/10 flex flex-col items-center justify-center ${
+                  layout === '1s' ? 'w-[300px] md:w-[340px]' : 
+                  layout === '2s' ? 'w-[260px] md:w-[300px]' : 
+                  'w-[180px] md:w-[220px]'
+                }`}
+                style={{ aspectRatio: `${config.width} / ${config.height}` }}
               >
                 {/* Dynamically Styled Frame Background */}
                 <div 
@@ -1496,7 +1501,16 @@ export function MemoryBoothPage() {
             <p className="text-[#FFFCE0]/70 text-center mb-8 text-sm">Unduh hasil karyamu di bawah ini dan bagikan di Instagram Story</p>
 
             {/* Generated Mockup Frame */}
-            <div className="relative overflow-hidden aspect-[9/16] bg-[#0c061a] w-[260px] md:w-[280px] shadow-2xl rounded-2xl border border-white/20 mb-8">
+            <div 
+              className={`relative overflow-hidden bg-[#0c061a] shadow-2xl rounded-2xl border border-white/20 mb-8 ${
+                exportMode === 'story' 
+                  ? 'w-[260px] md:w-[280px]' 
+                  : (layout === '1s' ? 'w-[300px] md:w-[340px]' : layout === '2s' ? 'w-[260px] md:w-[300px]' : 'w-[180px] md:w-[220px]')
+              }`}
+              style={{ 
+                aspectRatio: exportMode === 'story' ? '9 / 16' : `${config.width} / ${config.height}` 
+              }}
+            >
               {mediaMode === 'video' ? (
                 <video 
                   src={generatedUrl} 
