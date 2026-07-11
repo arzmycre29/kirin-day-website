@@ -78,8 +78,8 @@ const FILTERS = [
 ];
 
 const STORY_PLACEMENTS: Record<'1s' | '2s' | '4s', { bg: string; width: number; x: number; y: number }> = {
-  '1s': { bg: storyBg1s, width: 680, x: 200, y: 280 },
-  '2s': { bg: storyBg2s, width: 620, x: 230, y: 120 },
+  '1s': { bg: storyBg1s, width: 800, x: 140, y: 260 },
+  '2s': { bg: storyBg2s, width: 680, x: 200, y: 90 },
   '4s': { bg: storyBg4s, width: 530, x: 54, y: 112 }
 };
 
@@ -87,10 +87,14 @@ const STORY_PLACEMENTS: Record<'1s' | '2s' | '4s', { bg: string; width: number; 
 const loadImage = (src: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    // Only apply anonymous CORS policy for external Contentful assets to avoid tainting.
+    // Local blob URLs will fail loading if crossOrigin is set in some browsers.
+    if (src.startsWith('http') && !src.includes(window.location.host)) {
+      img.crossOrigin = 'anonymous';
+    }
     img.src = src;
-    img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
-    img.onerror = (e) => reject(e);
+    img.onerror = (e) => reject(new Error(`Failed to load image: ${src}`));
   });
 };
 
@@ -344,161 +348,6 @@ export function MemoryBoothPage() {
   const isWorkspaceComplete = slots.every(s => s.url !== null);
 
   // Render the Frame and text onto canvas dynamically
-  const drawFrameAndDecorations = async (
-    ctx: CanvasRenderingContext2D,
-    width: number,
-    height: number,
-    themeId: string,
-    textVal: string,
-    showDateVal: boolean
-  ) => {
-    const activeTheme = availableThemes.find(t => t.id === themeId) || THEMES[0];
-    const isContentfulTheme = activeTheme && 'isContentful' in activeTheme && activeTheme.isContentful;
-
-    // 1. Draw Background
-    if (isContentfulTheme) {
-      ctx.fillStyle = activeTheme.bgColor;
-      ctx.fillRect(0, 0, width, height);
-    } else if (themeId === 'blossom') {
-      const grad = ctx.createLinearGradient(0, 0, 0, height);
-      grad.addColorStop(0, '#FFD3E8');
-      grad.addColorStop(1, '#D6E4FF');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, width, height);
-    } else {
-      ctx.fillStyle = activeTheme.bgColor;
-      ctx.fillRect(0, 0, width, height);
-    }
-
-    // 2. Destination-Out erases the transparent slots
-    ctx.save();
-    ctx.globalCompositeOperation = 'destination-out';
-    config.slots.forEach(slot => {
-      ctx.fillRect(slot.x, slot.y, slot.w, slot.h);
-    });
-    ctx.restore();
-
-    // 3. Draw Overlay Image (Default or Contentful PNG)
-    if (isContentfulTheme) {
-      try {
-        const frameImg = await loadImage(activeTheme.imageUrl);
-        ctx.drawImage(frameImg, 0, 0, width, height);
-      } catch (err) {
-        console.error("Error loading Contentful frame image:", err);
-      }
-    } else if (themeId === 'default') {
-      try {
-        const frameImg = await loadImage(config.bgImage);
-        ctx.drawImage(frameImg, 0, 0);
-      } catch (err) {
-        console.error("Error loading default template frame:", err);
-      }
-    }
-
-    // 4. Draw Custom Theme borders and decals (only for local themes!)
-    if (!isContentfulTheme) {
-      config.slots.forEach(slot => {
-        ctx.save();
-        if (themeId === 'signature') {
-          ctx.strokeStyle = '#F6E05E';
-          ctx.lineWidth = 6;
-          ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
-        } else if (themeId === 'blossom') {
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 6;
-          ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
-        } else if (themeId === 'neon') {
-          ctx.strokeStyle = '#ff007f';
-          ctx.shadowColor = '#ff007f';
-          ctx.shadowBlur = 10;
-          ctx.lineWidth = 2;
-          ctx.strokeRect(slot.x - 3, slot.y - 3, slot.w + 6, slot.h + 6);
-          ctx.strokeStyle = '#00f0ff';
-          ctx.shadowColor = '#00f0ff';
-          ctx.shadowBlur = 15;
-          ctx.lineWidth = 5;
-          ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
-        } else if (themeId === 'filmstrip') {
-          ctx.strokeStyle = '#222222';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
-        }
-        ctx.restore();
-      });
-
-      // 5. Draw Decals
-      ctx.save();
-      if (themeId === 'signature') {
-        // Draw Gold Stars
-        ctx.fillStyle = '#F6E05E';
-        const drawStarDecal = (cx: number, cy: number, r: number) => {
-          ctx.beginPath();
-          for (let i = 0; i < 5; i++) {
-            ctx.lineTo(cx + Math.cos((18 + i * 72) * Math.PI / 180) * r, cy - Math.sin((18 + i * 72) * Math.PI / 180) * r);
-            ctx.lineTo(cx + Math.cos((54 + i * 72) * Math.PI / 180) * (r/2), cy - Math.sin((54 + i * 72) * Math.PI / 180) * (r/2));
-          }
-          ctx.closePath();
-          ctx.fill();
-        };
-        drawStarDecal(35, height - 162, 14);
-        drawStarDecal(width - 35, height - 162, 14);
-      } else if (themeId === 'blossom') {
-        // Draw clouds on margins
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        const drawCloud = (cx: number, cy: number, r: number) => {
-          ctx.beginPath();
-          ctx.arc(cx, cy, r, 0, Math.PI * 2);
-          ctx.arc(cx + r * 0.7, cy - r * 0.2, r * 0.8, 0, Math.PI * 2);
-          ctx.arc(cx - r * 0.7, cy - r * 0.1, r * 0.7, 0, Math.PI * 2);
-          ctx.closePath();
-          ctx.fill();
-        };
-        drawCloud(70, height - 162, 25);
-        drawCloud(width - 80, height - 200, 20);
-      } else if (themeId === 'filmstrip') {
-        // Draw Film sprocket holes on left and right margins
-        ctx.fillStyle = '#222222';
-        for (let sy = 25; sy < height - 25; sy += 85) {
-          // Left
-          ctx.fillRect(15, sy, 18, 30);
-          // Right
-          ctx.fillRect(width - 33, sy, 18, 30);
-        }
-      } else if (themeId === 'neon') {
-        // Draw cyber Grid dots on margins
-        ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
-        for (let gx = 20; gx < width; gx += 40) {
-          ctx.fillRect(gx, height - 280, 2, 2);
-          ctx.fillRect(gx, height - 80, 2, 2);
-        }
-      }
-      ctx.restore();
-    }
-
-    // 6. Draw Texts
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // Choose font color & family
-    ctx.fillStyle = activeTheme.textColor;
-    ctx.font = 'bold 36px Montserrat, sans-serif';
-    
-    // Draw Branding Text centered in the 324px bottom area
-    const textY = height - 162;
-    ctx.fillText(textVal.toUpperCase(), width / 2, textY - (showDateVal ? 20 : 0));
-
-    // Draw Date
-    if (showDateVal) {
-      const today = new Date();
-      const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
-      ctx.font = '500 20px Montserrat, sans-serif';
-      ctx.fillStyle = themeId === 'default' ? '#718096' : activeTheme.textColor + 'cc';
-      ctx.fillText(formattedDate, width / 2, textY + 30);
-    }
-    ctx.restore();
-  };
-
   // Compile full-res photostrip (flat)
   const compileStaticStripCanvas = async (): Promise<HTMLCanvasElement> => {
     const canvas = document.createElement('canvas');
@@ -507,10 +356,25 @@ export function MemoryBoothPage() {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error("Could not construct 2D context");
 
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const activeTheme = availableThemes.find(t => t.id === theme) || THEMES[0];
+    const isContentfulTheme = activeTheme && 'isContentful' in activeTheme && activeTheme.isContentful;
 
-    // 1. Draw Photos behind first
+    // 1. Draw Background
+    if (isContentfulTheme) {
+      ctx.fillStyle = activeTheme.bgColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else if (theme === 'blossom') {
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0, '#FFD3E8');
+      grad.addColorStop(1, '#D6E4FF');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = activeTheme.bgColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // 2. Draw Photos in Slots
     for (let i = 0; i < config.slots.length; i++) {
       const slot = config.slots[i];
       const slotState = slots[i];
@@ -525,7 +389,6 @@ export function MemoryBoothPage() {
 
       const img = await loadImage(slotState.url);
 
-      // Compute "Cover" dimensions
       const slotAspect = slot.w / slot.h;
       const imgAspect = img.width / img.height;
       let drawW = slot.w;
@@ -539,14 +402,12 @@ export function MemoryBoothPage() {
         drawH = slot.w / imgAspect;
       }
 
-      // Center and translate
       const centerX = slot.x + slot.w / 2;
       const centerY = slot.y + slot.h / 2;
       ctx.translate(centerX, centerY);
       ctx.rotate((slotState.rotation * Math.PI) / 180);
       ctx.scale(slotState.zoom, slotState.zoom);
 
-      // Apply Canvas Filter
       if (slotState.filter !== 'none') {
         const filterDef = FILTERS.find(f => f.id === slotState.filter);
         if (filterDef && filterDef.css) {
@@ -554,7 +415,6 @@ export function MemoryBoothPage() {
         }
       }
 
-      // Draw
       ctx.drawImage(
         img,
         -drawW / 2 + slotState.offsetX,
@@ -567,8 +427,114 @@ export function MemoryBoothPage() {
       ctx.restore();
     }
 
-    // 2. Draw Frame Overlay and decorations
-    await drawFrameAndDecorations(ctx, canvas.width, canvas.height, theme, customText, showDate);
+    // 3. Draw Overlay Image (Default or Contentful PNG) on top of photos
+    if (isContentfulTheme && activeTheme.imageUrl) {
+      try {
+        const frameImg = await loadImage(activeTheme.imageUrl);
+        ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
+      } catch (err) {
+        console.error("Error loading Contentful frame image:", err);
+      }
+    } else if (theme === 'default') {
+      try {
+        const frameImg = await loadImage(config.bgImage);
+        ctx.drawImage(frameImg, 0, 0);
+      } catch (err) {
+        console.error("Error loading default template frame:", err);
+      }
+    }
+
+    // 4. Draw Custom Theme borders and decals (only for local themes!)
+    if (!isContentfulTheme) {
+      config.slots.forEach(slot => {
+        ctx.save();
+        if (theme === 'signature') {
+          ctx.strokeStyle = '#F6E05E';
+          ctx.lineWidth = 6;
+          ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
+        } else if (theme === 'blossom') {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 6;
+          ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
+        } else if (theme === 'neon') {
+          ctx.strokeStyle = '#ff007f';
+          ctx.shadowColor = '#ff007f';
+          ctx.shadowBlur = 10;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(slot.x - 3, slot.y - 3, slot.w + 6, slot.h + 6);
+          ctx.strokeStyle = '#00f0ff';
+          ctx.shadowColor = '#00f0ff';
+          ctx.shadowBlur = 15;
+          ctx.lineWidth = 5;
+          ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
+        } else if (theme === 'filmstrip') {
+          ctx.strokeStyle = '#222222';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
+        }
+        ctx.restore();
+      });
+
+      // Draw Decals
+      ctx.save();
+      if (theme === 'signature') {
+        ctx.fillStyle = '#F6E05E';
+        const drawStarDecal = (cx: number, cy: number, r: number) => {
+          ctx.beginPath();
+          for (let i = 0; i < 5; i++) {
+            ctx.lineTo(cx + Math.cos((18 + i * 72) * Math.PI / 180) * r, cy - Math.sin((18 + i * 72) * Math.PI / 180) * r);
+            ctx.lineTo(cx + Math.cos((54 + i * 72) * Math.PI / 180) * (r/2), cy - Math.sin((54 + i * 72) * Math.PI / 180) * (r/2));
+          }
+          ctx.closePath();
+          ctx.fill();
+        };
+        drawStarDecal(35, canvas.height - 162, 14);
+        drawStarDecal(canvas.width - 35, canvas.height - 162, 14);
+      } else if (theme === 'blossom') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        const drawCloud = (cx: number, cy: number, r: number) => {
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.arc(cx + r * 0.7, cy - r * 0.2, r * 0.8, 0, Math.PI * 2);
+          ctx.arc(cx - r * 0.7, cy - r * 0.1, r * 0.7, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.fill();
+        };
+        drawCloud(70, canvas.height - 162, 25);
+        drawCloud(canvas.width - 80, canvas.height - 200, 20);
+      } else if (theme === 'filmstrip') {
+        ctx.fillStyle = '#222222';
+        for (let sy = 25; sy < canvas.height - 25; sy += 85) {
+          ctx.fillRect(15, sy, 18, 30);
+          ctx.fillRect(canvas.width - 33, sy, 18, 30);
+        }
+      } else if (theme === 'neon') {
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
+        for (let gx = 20; gx < canvas.width; gx += 40) {
+          ctx.fillRect(gx, canvas.height - 280, 2, 2);
+          ctx.fillRect(gx, canvas.height - 80, 2, 2);
+        }
+      }
+      ctx.restore();
+    }
+
+    // 5. Draw Texts
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = activeTheme.textColor;
+    ctx.font = 'bold 36px Montserrat, sans-serif';
+    const textY = canvas.height - 162;
+    ctx.fillText(customText.toUpperCase(), canvas.width / 2, textY - (showDate ? 20 : 0));
+
+    if (showDate) {
+      const today = new Date();
+      const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
+      ctx.font = '500 20px Montserrat, sans-serif';
+      ctx.fillStyle = theme === 'default' ? '#718096' : activeTheme.textColor + 'cc';
+      ctx.fillText(formattedDate, canvas.width / 2, textY + 30);
+    }
+    ctx.restore();
 
     return canvas;
   };
@@ -652,6 +618,21 @@ export function MemoryBoothPage() {
     const vids = videoRefs.current.filter(v => v !== null) as HTMLVideoElement[];
     if (vids.length === 0) return;
 
+    const activeTheme = availableThemes.find(t => t.id === theme) || THEMES[0];
+    const isContentfulTheme = activeTheme && 'isContentful' in activeTheme && activeTheme.isContentful;
+
+    // Pre-load the overlay image once before starting the render loop!
+    let overlayImg: HTMLImageElement | null = null;
+    try {
+      if (isContentfulTheme && activeTheme.imageUrl) {
+        overlayImg = await loadImage(activeTheme.imageUrl);
+      } else if (theme === 'default') {
+        overlayImg = await loadImage(config.bgImage);
+      }
+    } catch (err) {
+      console.error("Error pre-loading overlay image for video recording:", err);
+    }
+
     // Reset video playbacks
     vids.forEach(v => {
       v.currentTime = 0;
@@ -683,12 +664,26 @@ export function MemoryBoothPage() {
 
     // Render loop function
     let animId: number;
-    let frameCount = 0;
 
-    const renderLoop = async () => {
+    const renderLoop = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw active frames of videos in slots
+      // 1. Draw Background
+      if (isContentfulTheme) {
+        ctx.fillStyle = activeTheme.bgColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else if (theme === 'blossom') {
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, '#FFD3E8');
+        grad.addColorStop(1, '#D6E4FF');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.fillStyle = activeTheme.bgColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // 2. Draw active video frames in slots
       for (let i = 0; i < config.slots.length; i++) {
         const slot = config.slots[i];
         const slotState = slots[i];
@@ -741,8 +736,102 @@ export function MemoryBoothPage() {
         }
       }
 
-      // Draw overlay frame
-      await drawFrameAndDecorations(ctx, canvas.width, canvas.height, theme, customText, showDate);
+      // 3. Draw pre-loaded overlay PNG frame on top
+      if (overlayImg) {
+        ctx.drawImage(overlayImg, 0, 0, canvas.width, canvas.height);
+      }
+
+      // 4. Draw Custom Theme borders and decals (only for local themes!)
+      if (!isContentfulTheme) {
+        config.slots.forEach(slot => {
+          ctx.save();
+          if (theme === 'signature') {
+            ctx.strokeStyle = '#F6E05E';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
+          } else if (theme === 'blossom') {
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
+          } else if (theme === 'neon') {
+            ctx.strokeStyle = '#ff007f';
+            ctx.shadowColor = '#ff007f';
+            ctx.shadowBlur = 10;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(slot.x - 3, slot.y - 3, slot.w + 6, slot.h + 6);
+            ctx.strokeStyle = '#00f0ff';
+            ctx.shadowColor = '#00f0ff';
+            ctx.shadowBlur = 15;
+            ctx.lineWidth = 5;
+            ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
+          } else if (theme === 'filmstrip') {
+            ctx.strokeStyle = '#222222';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(slot.x, slot.y, slot.w, slot.h);
+          }
+          ctx.restore();
+        });
+
+        // Draw Decals
+        ctx.save();
+        if (theme === 'signature') {
+          ctx.fillStyle = '#F6E05E';
+          const drawStarDecal = (cx: number, cy: number, r: number) => {
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+              ctx.lineTo(cx + Math.cos((18 + i * 72) * Math.PI / 180) * r, cy - Math.sin((18 + i * 72) * Math.PI / 180) * r);
+              ctx.lineTo(cx + Math.cos((54 + i * 72) * Math.PI / 180) * (r/2), cy - Math.sin((54 + i * 72) * Math.PI / 180) * (r/2));
+            }
+            ctx.closePath();
+            ctx.fill();
+          };
+          drawStarDecal(35, canvas.height - 162, 14);
+          drawStarDecal(canvas.width - 35, canvas.height - 162, 14);
+        } else if (theme === 'blossom') {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+          const drawCloud = (cx: number, cy: number, r: number) => {
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.arc(cx + r * 0.7, cy - r * 0.2, r * 0.8, 0, Math.PI * 2);
+            ctx.arc(cx - r * 0.7, cy - r * 0.1, r * 0.7, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fill();
+          };
+          drawCloud(70, canvas.height - 162, 25);
+          drawCloud(canvas.width - 80, canvas.height - 200, 20);
+        } else if (theme === 'filmstrip') {
+          ctx.fillStyle = '#222222';
+          for (let sy = 25; sy < canvas.height - 25; sy += 85) {
+            ctx.fillRect(15, sy, 18, 30);
+            ctx.fillRect(canvas.width - 33, sy, 18, 30);
+          }
+        } else if (theme === 'neon') {
+          ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
+          for (let gx = 20; gx < canvas.width; gx += 40) {
+            ctx.fillRect(gx, canvas.height - 280, 2, 2);
+            ctx.fillRect(gx, canvas.height - 80, 2, 2);
+          }
+        }
+        ctx.restore();
+      }
+
+      // 5. Draw Texts
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = activeTheme.textColor;
+      ctx.font = 'bold 36px Montserrat, sans-serif';
+      const textY = canvas.height - 162;
+      ctx.fillText(customText.toUpperCase(), canvas.width / 2, textY - (showDate ? 20 : 0));
+
+      if (showDate) {
+        const today = new Date();
+        const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
+        ctx.font = '500 20px Montserrat, sans-serif';
+        ctx.fillStyle = theme === 'default' ? '#718096' : activeTheme.textColor + 'cc';
+        ctx.fillText(formattedDate, canvas.width / 2, textY + 30);
+      }
+      ctx.restore();
 
       // Record frames
       animId = requestAnimationFrame(renderLoop);
