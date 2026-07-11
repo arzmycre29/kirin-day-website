@@ -1332,7 +1332,7 @@ export function MemoryBoothPage() {
                       onMouseDown={(e) => handleDragStart(e, idx)}
                       onTouchStart={(e) => handleDragStart(e, idx)}
                       className={`absolute cursor-move border-2 transition-colors ${
-                        isCurrent ? 'border-[#F6E05E] overflow-visible z-20 shadow-[0_0_15px_rgba(246,224,94,0.3)]' : 'overflow-hidden border-transparent z-10'
+                        isCurrent ? 'border-[#F6E05E] overflow-visible z-40 shadow-[0_0_20px_rgba(246,224,94,0.4)]' : 'overflow-hidden border-transparent z-10'
                       } ${!state.url ? 'bg-white/5 border-dashed border-white/20 hover:bg-white/10' : ''}`}
                       style={{
                         left: `${pLeft}%`,
