@@ -694,17 +694,28 @@ export function MemoryBoothPage() {
     const isStory = exportMode === 'story';
     const scale = 0.5; // Scale down for mobile smoothness and lightweight encoding
 
+    // Calculate target dimensions and guarantee they are even (H.264 video encoding compliance)
+    let targetWidth = (isStory ? 1080 : config.width) * scale;
+    let targetHeight = (isStory ? 1920 : config.height) * scale;
+    targetWidth = Math.floor(targetWidth / 2) * 2;
+    targetHeight = Math.floor(targetHeight / 2) * 2;
+
+    let targetStripWidth = config.width * scale;
+    let targetStripHeight = config.height * scale;
+    targetStripWidth = Math.floor(targetStripWidth / 2) * 2;
+    targetStripHeight = Math.floor(targetStripHeight / 2) * 2;
+
     // 1. Main recording canvas
     const recordingCanvas = document.createElement('canvas');
-    recordingCanvas.width = (isStory ? 1080 : config.width) * scale;
-    recordingCanvas.height = (isStory ? 1920 : config.height) * scale;
+    recordingCanvas.width = targetWidth;
+    recordingCanvas.height = targetHeight;
     const recordingCtx = recordingCanvas.getContext('2d');
     if (!recordingCtx) throw new Error("Recording canvas context construction failed");
 
     // Hidden strip canvas (used if exportMode === 'story' to compile the strip first)
     const stripCanvas = isStory ? document.createElement('canvas') : recordingCanvas;
-    stripCanvas.width = config.width * scale;
-    stripCanvas.height = config.height * scale;
+    stripCanvas.width = targetStripWidth;
+    stripCanvas.height = targetStripHeight;
     const stripCtx = stripCanvas.getContext('2d');
     if (!stripCtx) throw new Error("Strip canvas context construction failed");
 
@@ -748,27 +759,24 @@ export function MemoryBoothPage() {
     // Wait 600ms for seeking and frame decoding to fully complete in the browser
     await new Promise(resolve => setTimeout(resolve, 600));
 
-    // Pre-cache static starting frame canvases for each slot to use as poster frames
-    const posterCanvases: HTMLCanvasElement[] = [];
+    // Pre-cache static starting frames as fallback, and prepare dynamic cache contexts
+    const cacheCanvases: HTMLCanvasElement[] = [];
+    const cacheCtxs: (CanvasRenderingContext2D | null)[] = [];
     for (let i = 0; i < config.slots.length; i++) {
       const video = videoRefs.current[i];
       const pCanvas = document.createElement('canvas');
-      if (video && slots[i]?.url) {
-        pCanvas.width = video.videoWidth || 640;
-        pCanvas.height = video.videoHeight || 480;
-        const pCtx = pCanvas.getContext('2d');
-        if (pCtx) {
-          try {
-            pCtx.drawImage(video, 0, 0, pCanvas.width, pCanvas.height);
-          } catch (e) {
-            console.warn("Failed to capture poster frame for slot:", i, e);
-          }
+      pCanvas.width = video?.videoWidth || 640;
+      pCanvas.height = video?.videoHeight || 480;
+      const pCtx = pCanvas.getContext('2d');
+      if (pCtx && video && slots[i]?.url) {
+        try {
+          pCtx.drawImage(video, 0, 0, pCanvas.width, pCanvas.height);
+        } catch (e) {
+          console.warn("Failed to capture initial poster frame for slot:", i, e);
         }
-      } else {
-        pCanvas.width = 100;
-        pCanvas.height = 100;
       }
-      posterCanvases.push(pCanvas);
+      cacheCanvases.push(pCanvas);
+      cacheCtxs.push(pCtx);
     }
 
     // Canvas stream & recorder setup
@@ -876,6 +884,15 @@ export function MemoryBoothPage() {
         lastSegment = currentSegment;
       }
 
+      // Pre-emptive loop reset for the active video 100ms before it hits the 3.0s boundary
+      const activeVideo = videoRefs.current[activeIdx];
+      if (activeVideo && !activeVideo.seeking) {
+        const clipStart = slots[activeIdx]?.startTime || 0;
+        if (activeVideo.currentTime >= clipStart + 2.9) {
+          activeVideo.currentTime = clipStart;
+        }
+      }
+
       // Clear canvases
       stripCtx.clearRect(0, 0, stripCanvas.width, stripCanvas.height);
       if (isStory) {
@@ -910,11 +927,21 @@ export function MemoryBoothPage() {
         const isSlotActive = i === activeIdx;
         const isVideoReady = video && video.readyState >= 2 && !video.seeking;
         
-        // Dynamic source media: draw the live playing video if active and ready,
-        // otherwise draw the static pre-cached poster canvas (prevents black/seeking frames)
-        const sourceMedia = (isSlotActive && isVideoReady) ? video : posterCanvases[i];
-        const imgW = (isSlotActive && isVideoReady) ? video.videoWidth : posterCanvases[i].width;
-        const imgH = (isSlotActive && isVideoReady) ? video.videoHeight : posterCanvases[i].height;
+        // Cache frame if video is ready, otherwise fall back to cache canvas
+        if (isVideoReady && video) {
+          const cCtx = cacheCtxs[i];
+          if (cCtx) {
+            try {
+              cCtx.drawImage(video, 0, 0, cacheCanvases[i].width, cacheCanvases[i].height);
+            } catch (e) {
+              // Ignore canvas drawing errors if video frame is briefly untainted/unavailable
+            }
+          }
+        }
+
+        const sourceMedia = isVideoReady ? video : cacheCanvases[i];
+        const imgW = isVideoReady ? (video?.videoWidth || cacheCanvases[i].width) : cacheCanvases[i].width;
+        const imgH = isVideoReady ? (video?.videoHeight || cacheCanvases[i].height) : cacheCanvases[i].height;
 
         if (slotState.url && sourceMedia) {
           stripCtx.save();
@@ -1331,7 +1358,7 @@ export function MemoryBoothPage() {
                               playsInline
                               onTimeUpdate={(e) => {
                                 const start = state.startTime || 0;
-                                if (e.currentTarget.currentTime >= start + 3) {
+                                if (e.currentTarget.currentTime >= start + 2.9) {
                                   e.currentTarget.currentTime = start;
                                 }
                                 if (e.currentTarget.currentTime < start) {
