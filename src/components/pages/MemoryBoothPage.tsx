@@ -226,6 +226,15 @@ export function MemoryBoothPage() {
     }
   }, [layout, availableThemes, theme]);
 
+  // Calculate the minimum zoom to fill the slot (like object-cover)
+  const calcAutoFitZoom = (mediaW: number, mediaH: number, slotIdx: number): number => {
+    const slotDef = config.slots[slotIdx];
+    if (!slotDef || !mediaW || !mediaH) return 1.0;
+    const scaleW = slotDef.w / mediaW;
+    const scaleH = slotDef.h / mediaH;
+    return parseFloat(Math.max(scaleW, scaleH).toFixed(3));
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (activeSlotIndex === null || !e.target.files || e.target.files.length === 0) return;
     
@@ -258,7 +267,8 @@ export function MemoryBoothPage() {
           setTrimFile(file);
           setTrimModalOpen(true);
         } else {
-          // Video is under 3 seconds, apply directly
+          // Video is under 3 seconds, apply directly with auto-fit zoom
+          const fitZoom = calcAutoFitZoom(tempVideo.videoWidth, tempVideo.videoHeight, activeSlotIndex);
           setSlots(prev => prev.map((s, idx) => {
             if (idx === activeSlotIndex) {
               if (s.url) URL.revokeObjectURL(s.url);
@@ -268,7 +278,7 @@ export function MemoryBoothPage() {
                 url: fileUrl,
                 type: 'video',
                 startTime: 0,
-                zoom: 1.0,
+                zoom: fitZoom,
                 rotation: 0,
                 offsetX: 0,
                 offsetY: 0
@@ -279,16 +289,49 @@ export function MemoryBoothPage() {
         }
       };
     } else {
-      // Apply photo directly
+      // Apply photo directly with auto-fit zoom using a temp Image element
+      const img = new Image();
+      img.onload = () => {
+        const fitZoom = calcAutoFitZoom(img.naturalWidth, img.naturalHeight, activeSlotIndex);
+        setSlots(prev => prev.map((s, idx) => {
+          if (idx === activeSlotIndex) {
+            if (s.url) URL.revokeObjectURL(s.url);
+            return {
+              ...s,
+              file,
+              url: fileUrl,
+              type: 'image',
+              zoom: fitZoom,
+              rotation: 0,
+              offsetX: 0,
+              offsetY: 0
+            };
+          }
+          return s;
+        }));
+      };
+      img.src = fileUrl;
+    }
+  };
+
+  const handleSaveTrim = () => {
+    if (trimSlotIndex === null || !trimFile || !trimVideoUrl) return;
+    
+    // Create a temp video to measure dimensions for auto-fit zoom
+    const tempV = document.createElement('video');
+    tempV.src = trimVideoUrl;
+    tempV.onloadedmetadata = () => {
+      const fitZoom = calcAutoFitZoom(tempV.videoWidth, tempV.videoHeight, trimSlotIndex);
       setSlots(prev => prev.map((s, idx) => {
-        if (idx === activeSlotIndex) {
+        if (idx === trimSlotIndex) {
           if (s.url) URL.revokeObjectURL(s.url);
           return {
             ...s,
-            file,
-            url: fileUrl,
-            type: 'image',
-            zoom: 1.0,
+            file: trimFile,
+            url: trimVideoUrl,
+            type: 'video',
+            startTime: trimStartTime,
+            zoom: fitZoom,
             rotation: 0,
             offsetX: 0,
             offsetY: 0
@@ -296,34 +339,12 @@ export function MemoryBoothPage() {
         }
         return s;
       }));
-    }
-  };
-
-  const handleSaveTrim = () => {
-    if (trimSlotIndex === null || !trimFile || !trimVideoUrl) return;
-    
-    setSlots(prev => prev.map((s, idx) => {
-      if (idx === trimSlotIndex) {
-        if (s.url) URL.revokeObjectURL(s.url);
-        return {
-          ...s,
-          file: trimFile,
-          url: trimVideoUrl,
-          type: 'video',
-          startTime: trimStartTime,
-          zoom: 1.0,
-          rotation: 0,
-          offsetX: 0,
-          offsetY: 0
-        };
-      }
-      return s;
-    }));
-    
-    setTrimModalOpen(false);
-    setTrimFile(null);
-    setTrimVideoUrl(null);
-    setTrimSlotIndex(null);
+      setTrimModalOpen(false);
+      setTrimFile(null);
+      setTrimSlotIndex(null);
+    };
+    // Fallback if metadata doesn't fire
+    setTimeout(() => setTrimModalOpen(false), 3000);
   };
 
   const handleCancelTrim = () => {
@@ -1363,8 +1384,6 @@ export function MemoryBoothPage() {
                       {/* Slot Content */}
                       {state.url ? (
                         <div className="w-full h-full relative pointer-events-none">
-                          {/* Dark bg shows crop boundary area outside the media */}
-                          {isCurrent && <div className="absolute inset-0 bg-black/40 z-0" />}
                           {state.type === 'video' ? (
                             <video 
                               ref={el => { videoRefs.current[idx] = el; }}
@@ -1381,9 +1400,7 @@ export function MemoryBoothPage() {
                                   e.currentTarget.currentTime = start;
                                 }
                               }}
-                              className={`w-full h-full origin-center relative z-10 ${
-                                isCurrent ? 'object-contain' : 'object-cover'
-                              }`}
+                              className="w-full h-full object-cover origin-center"
                               style={{
                                 transform: `translate(${state.offsetX}px, ${state.offsetY}px) rotate(${state.rotation}deg) scale(${state.zoom})`,
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
@@ -1393,14 +1410,16 @@ export function MemoryBoothPage() {
                             <img 
                               src={state.url}
                               alt={`Slot ${idx + 1}`}
-                              className={`w-full h-full origin-center relative z-10 ${
-                                isCurrent ? 'object-contain' : 'object-cover'
-                              }`}
+                              className="w-full h-full object-cover origin-center"
                               style={{
                                 transform: `translate(${state.offsetX}px, ${state.offsetY}px) rotate(${state.rotation}deg) scale(${state.zoom})`,
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
                               }}
                             />
+                          )}
+                          {/* Crop guide: dashed border shows exact slot boundary = final result */}
+                          {isCurrent && (
+                            <div className="absolute inset-0 border-2 border-dashed border-white/60 pointer-events-none z-20" />
                           )}
                         </div>
                       ) : (
@@ -1602,6 +1621,33 @@ export function MemoryBoothPage() {
                           className="w-full h-1.5 bg-white/15 rounded-lg appearance-none cursor-pointer accent-[#F6E05E]"
                         />
                       </div>
+
+                      {/* Reset Transform Button */}
+                      <button
+                        onClick={() => {
+                          const slotState = slots[activeSlotIndex];
+                          let fitZoom = 1.0;
+                          if (slotState.type === 'image') {
+                            const img = new Image();
+                            img.onload = () => {
+                              fitZoom = calcAutoFitZoom(img.naturalWidth, img.naturalHeight, activeSlotIndex);
+                              updateActiveSlotProperty('zoom', fitZoom);
+                            };
+                            img.src = slotState.url || '';
+                          } else if (slotState.type === 'video') {
+                            const v = videoRefs.current[activeSlotIndex];
+                            if (v) fitZoom = calcAutoFitZoom(v.videoWidth, v.videoHeight, activeSlotIndex);
+                          }
+                          setSlots(prev => prev.map((s, idx) =>
+                            idx === activeSlotIndex
+                              ? { ...s, zoom: fitZoom, rotation: 0, offsetX: 0, offsetY: 0 }
+                              : s
+                          ));
+                        }}
+                        className="w-full py-2.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-white/70 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center gap-2"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" /> Reset Posisi & Zoom
+                      </button>
 
                       {/* Filter Grid */}
                       <div>
