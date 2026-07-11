@@ -582,24 +582,6 @@ export function MemoryBoothPage() {
       ctx.restore();
     }
 
-    // 5. Draw Texts
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = activeTheme.textColor;
-    ctx.font = 'bold 36px Montserrat, sans-serif';
-    const textY = canvas.height - 162;
-    ctx.fillText(customText.toUpperCase(), canvas.width / 2, textY - (showDate ? 20 : 0));
-
-    if (showDate) {
-      const today = new Date();
-      const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
-      ctx.font = '500 20px Montserrat, sans-serif';
-      ctx.fillStyle = theme === 'default' ? '#718096' : activeTheme.textColor + 'cc';
-      ctx.fillText(formattedDate, canvas.width / 2, textY + 30);
-    }
-    ctx.restore();
-
     return canvas;
   };
 
@@ -1352,8 +1334,11 @@ export function MemoryBoothPage() {
                               }}
                               className="w-full h-full object-cover origin-center"
                               style={{
-                                // offsetX/offsetY are stored in canvas units → convert back to screen px for CSS
-                                transform: `translate(${state.offsetX / (config.width / (previewContainerRef.current?.clientWidth || config.width))}px, ${state.offsetY / (config.height / (previewContainerRef.current?.clientHeight || config.height))}px) rotate(${state.rotation}deg) scale(${state.zoom})`,
+                                // Convert canvas-unit offsets back to screen px using uniform scale
+                                transform: (() => {
+                                  const displayScale = (previewContainerRef.current?.clientWidth || config.width) / config.width;
+                                  return `translate(${state.offsetX * displayScale}px, ${state.offsetY * displayScale}px) rotate(${state.rotation}deg) scale(${state.zoom})`;
+                                })(),
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
                               }}
                             />
@@ -1363,8 +1348,11 @@ export function MemoryBoothPage() {
                               alt={`Slot ${idx + 1}`}
                               className="w-full h-full object-cover origin-center"
                               style={{
-                                // offsetX/offsetY are stored in canvas units → convert back to screen px for CSS
-                                transform: `translate(${state.offsetX / (config.width / (previewContainerRef.current?.clientWidth || config.width))}px, ${state.offsetY / (config.height / (previewContainerRef.current?.clientHeight || config.height))}px) rotate(${state.rotation}deg) scale(${state.zoom})`,
+                                // Convert canvas-unit offsets back to screen px using uniform scale
+                                transform: (() => {
+                                  const displayScale = (previewContainerRef.current?.clientWidth || config.width) / config.width;
+                                  return `translate(${state.offsetX * displayScale}px, ${state.offsetY * displayScale}px) rotate(${state.rotation}deg) scale(${state.zoom})`;
+                                })(),
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
                               }}
                             />
