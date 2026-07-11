@@ -22,6 +22,7 @@ interface SlotData {
   offsetX: number;         // offset X in pixels
   offsetY: number;         // offset Y in pixels
   filter: string;          // filter style
+  startTime?: number;      // Trimmed video start time in seconds
 }
 
 interface LayoutConfig {
@@ -77,10 +78,10 @@ const FILTERS = [
   { id: 'noir', name: 'Noir', css: 'grayscale(100%) contrast(140%) brightness(90%)' }
 ];
 
-const STORY_PLACEMENTS: Record<'1s' | '2s' | '4s', { bg: string; width: number; x: number; y: number }> = {
-  '1s': { bg: storyBg1s, width: 800, x: 140, y: 260 },
-  '2s': { bg: storyBg2s, width: 680, x: 200, y: 90 },
-  '4s': { bg: storyBg4s, width: 530, x: 54, y: 112 }
+const STORY_PLACEMENTS: Record<'1s' | '2s' | '4s', { bg: string; width: number; height: number; x: number; y: number }> = {
+  '1s': { bg: storyBg1s, width: 948, height: 971, x: 66, y: 359 },
+  '2s': { bg: storyBg2s, width: 758, height: 1328, x: 63, y: 73 },
+  '4s': { bg: storyBg4s, width: 538, height: 1722, x: 65, y: 93 }
 };
 
 // Helper to pre-load image sources as HTMLImageElements
@@ -120,6 +121,15 @@ export function MemoryBoothPage() {
   const [exportMode, setExportMode] = useState<'story' | 'strip'>('story'); // 'story' (9:16) or 'strip' (exact frame size)
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
 
+  // Trimming State
+  const [trimModalOpen, setTrimModalOpen] = useState(false);
+  const [trimVideoUrl, setTrimVideoUrl] = useState<string | null>(null);
+  const [trimVideoDuration, setTrimVideoDuration] = useState(0);
+  const [trimStartTime, setTrimStartTime] = useState(0);
+  const [trimSlotIndex, setTrimSlotIndex] = useState<number | null>(null);
+  const [trimFile, setTrimFile] = useState<File | null>(null);
+  const trimVideoRef = useRef<HTMLVideoElement | null>(null);
+
   // HTML Element Refs for Preview & Canvas Exports
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
@@ -145,7 +155,8 @@ export function MemoryBoothPage() {
         rotation: 0,
         offsetX: 0,
         offsetY: 0,
-        filter: 'none'
+        filter: 'none',
+        startTime: 0
       }))
     );
     setActiveSlotIndex(0);
@@ -227,16 +238,73 @@ export function MemoryBoothPage() {
 
     const fileUrl = URL.createObjectURL(file);
 
-    // Update active slot
+    if (isVideo) {
+      // Create a temporary video element to check its duration
+      const tempVideo = document.createElement('video');
+      tempVideo.src = fileUrl;
+      tempVideo.onloadedmetadata = () => {
+        const duration = tempVideo.duration;
+        if (duration > 3.05) { // If video is longer than 3 seconds
+          setTrimVideoUrl(fileUrl);
+          setTrimVideoDuration(duration);
+          setTrimStartTime(0);
+          setTrimSlotIndex(activeSlotIndex);
+          setTrimFile(file);
+          setTrimModalOpen(true);
+        } else {
+          // Video is under 3 seconds, apply directly
+          setSlots(prev => prev.map((s, idx) => {
+            if (idx === activeSlotIndex) {
+              if (s.url) URL.revokeObjectURL(s.url);
+              return {
+                ...s,
+                file,
+                url: fileUrl,
+                type: 'video',
+                startTime: 0,
+                zoom: 1.0,
+                rotation: 0,
+                offsetX: 0,
+                offsetY: 0
+              };
+            }
+            return s;
+          }));
+        }
+      };
+    } else {
+      // Apply photo directly
+      setSlots(prev => prev.map((s, idx) => {
+        if (idx === activeSlotIndex) {
+          if (s.url) URL.revokeObjectURL(s.url);
+          return {
+            ...s,
+            file,
+            url: fileUrl,
+            type: 'image',
+            zoom: 1.0,
+            rotation: 0,
+            offsetX: 0,
+            offsetY: 0
+          };
+        }
+        return s;
+      }));
+    }
+  };
+
+  const handleSaveTrim = () => {
+    if (trimSlotIndex === null || !trimFile || !trimVideoUrl) return;
+    
     setSlots(prev => prev.map((s, idx) => {
-      if (idx === activeSlotIndex) {
-        // Clean up previous URL if it exists
+      if (idx === trimSlotIndex) {
         if (s.url) URL.revokeObjectURL(s.url);
         return {
           ...s,
-          file,
-          url: fileUrl,
-          type: isVideo ? 'video' : 'image',
+          file: trimFile,
+          url: trimVideoUrl,
+          type: 'video',
+          startTime: trimStartTime,
           zoom: 1.0,
           rotation: 0,
           offsetX: 0,
@@ -245,6 +313,21 @@ export function MemoryBoothPage() {
       }
       return s;
     }));
+    
+    setTrimModalOpen(false);
+    setTrimFile(null);
+    setTrimVideoUrl(null);
+    setTrimSlotIndex(null);
+  };
+
+  const handleCancelTrim = () => {
+    if (trimVideoUrl) {
+      URL.revokeObjectURL(trimVideoUrl);
+    }
+    setTrimModalOpen(false);
+    setTrimFile(null);
+    setTrimVideoUrl(null);
+    setTrimSlotIndex(null);
   };
 
   const triggerFileInput = (idx: number) => {
@@ -634,8 +717,9 @@ export function MemoryBoothPage() {
     }
 
     // Reset video playbacks
-    vids.forEach(v => {
-      v.currentTime = 0;
+    vids.forEach((v, i) => {
+      const start = slots[i]?.startTime || 0;
+      v.currentTime = start;
       v.play().catch(e => console.log("Video auto play failed:", e));
     });
 
@@ -690,6 +774,15 @@ export function MemoryBoothPage() {
         const video = videoRefs.current[i];
 
         if (slotState.url && video && video.readyState >= 2) {
+          // Keep video within trimmed duration during capture
+          const start = slotState.startTime || 0;
+          if (video.currentTime >= start + 3) {
+            video.currentTime = start;
+          }
+          if (video.currentTime < start) {
+            video.currentTime = start;
+          }
+
           ctx.save();
           ctx.beginPath();
           ctx.rect(slot.x, slot.y, slot.w, slot.h);
@@ -841,8 +934,8 @@ export function MemoryBoothPage() {
     renderLoop();
     recorder.start();
 
-    // Record for exactly 5 seconds
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    // Record for exactly 3 seconds
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     // Stop recorder & loop
     recorder.stop();
@@ -1159,11 +1252,19 @@ export function MemoryBoothPage() {
                           {state.type === 'video' ? (
                             <video 
                               ref={el => { videoRefs.current[idx] = el; }}
-                              src={state.url}
-                              loop 
+                              src={state.url || undefined}
                               muted 
                               autoPlay 
                               playsInline
+                              onTimeUpdate={(e) => {
+                                const start = state.startTime || 0;
+                                if (e.currentTarget.currentTime >= start + 3) {
+                                  e.currentTarget.currentTime = start;
+                                }
+                                if (e.currentTarget.currentTime < start) {
+                                  e.currentTarget.currentTime = start;
+                                }
+                              }}
                               className="w-full h-full object-cover origin-center"
                               style={{
                                 transform: `translate(${state.offsetX}px, ${state.offsetY}px) rotate(${state.rotation}deg) scale(${state.zoom})`,
@@ -1273,26 +1374,7 @@ export function MemoryBoothPage() {
                   return null;
                 })()}
 
-                {/* 3. Bottom Branding Texts */}
-                <div 
-                  className="absolute bottom-0 left-0 right-0 z-40 flex flex-col items-center justify-center text-center pointer-events-none"
-                  style={{
-                    height: `${(324 / config.height) * 100}%`,
-                    color: availableThemes.find(t => t.id === theme)?.textColor || '#ffffff'
-                  }}
-                >
-                  <span className="font-black text-sm tracking-widest px-4 uppercase block select-none">
-                    {customText || 'KIRIN DAY'}
-                  </span>
-                  {showDate && (
-                    <span className="text-[9px] font-bold tracking-wider mt-1.5 opacity-80 block select-none">
-                      {(() => {
-                        const today = new Date();
-                        return `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
-                      })()}
-                    </span>
-                  )}
-                </div>
+                {/* Bottom Text/Watermark Option Removed per request */}
 
               </div>
               <span className="text-xs text-[#FFFCE0]/50 mt-4 flex items-center gap-1.5">
@@ -1426,37 +1508,7 @@ export function MemoryBoothPage() {
 
                   <hr className="border-white/10" />
 
-                  {/* Dynamic Branding Text and Custom Watermark Settings */}
-                  <div className="space-y-4">
-                    <span className="text-xs font-black tracking-wider text-[#FFFCE0]/80 block">Kustomisasi Teks Frame</span>
-                    
-                    {/* Bottom label */}
-                    <div>
-                      <label className="text-xs text-white/60 block mb-1.5">Teks Branding Bawah</label>
-                      <input
-                        type="text"
-                        maxLength={18}
-                        value={customText}
-                        onChange={(e) => setCustomText(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-[#F6E05E]"
-                        placeholder="KIRIN DAY"
-                      />
-                    </div>
-
-                    {/* Date Toggle */}
-                    <div className="flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10">
-                      <div className="text-left">
-                        <span className="text-sm font-bold block">Tampilkan Tanggal</span>
-                        <span className="text-[10px] text-white/40">Watermark tanggal pembuatan otomatis</span>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={showDate}
-                        onChange={(e) => setShowDate(e.target.checked)}
-                        className="w-5 h-5 rounded border-white/10 accent-[#F6E05E] cursor-pointer"
-                      />
-                    </div>
-                  </div>
+                  {/* Text customization removed per user request */}
 
                   {/* Complete Workspace generate actions */}
                   <div className="pt-4">
@@ -1544,6 +1596,88 @@ export function MemoryBoothPage() {
                   className="flex-1 py-3 rounded-xl bg-[#F6E05E] text-[#1a2f47] font-black hover:scale-103 transition-transform text-xs"
                 >
                   Ya, Generate!
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIDEO TRIM MODAL */}
+        {trimModalOpen && trimVideoUrl && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-[#1a2f47] border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+              <h4 className="text-lg font-black mb-1 text-[#FFFCE0]">Pangkas Durasi Video</h4>
+              <p className="text-xs text-[#FFFCE0]/70 mb-4">
+                Durasi video maksimum adalah 3 detik. Pilih bagian video yang ingin kamu gunakan.
+              </p>
+
+              {/* Video Preview */}
+              <div className="relative aspect-[4/3] bg-black/40 rounded-xl overflow-hidden mb-6 border border-white/10 flex items-center justify-center">
+                <video 
+                  ref={trimVideoRef}
+                  src={trimVideoUrl}
+                  muted
+                  autoPlay
+                  playsInline
+                  onTimeUpdate={(e) => {
+                    const el = e.currentTarget;
+                    if (el.currentTime >= trimStartTime + 3) {
+                      el.currentTime = trimStartTime;
+                    }
+                    if (el.currentTime < trimStartTime) {
+                      el.currentTime = trimStartTime;
+                    }
+                  }}
+                  onLoadedMetadata={(e) => {
+                    e.currentTarget.currentTime = trimStartTime;
+                  }}
+                  className="max-h-full max-w-full object-contain"
+                />
+                <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-[10px] font-mono text-[#F6E05E]">
+                  Range: {trimStartTime.toFixed(1)}s - {(trimStartTime + 3).toFixed(1)}s
+                </div>
+              </div>
+
+              {/* Trim slider control */}
+              <div className="space-y-2 mb-6">
+                <div className="flex justify-between text-xs font-bold text-white/80">
+                  <span>Mulai dari: {trimStartTime.toFixed(1)} detik</span>
+                  <span>Total Video: {trimVideoDuration.toFixed(1)} detik</span>
+                </div>
+                <input 
+                  type="range"
+                  min="0"
+                  max={Math.max(0, trimVideoDuration - 3).toString()}
+                  step="0.1"
+                  value={trimStartTime}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setTrimStartTime(val);
+                    if (trimVideoRef.current) {
+                      trimVideoRef.current.currentTime = val;
+                    }
+                  }}
+                  className="w-full h-1.5 bg-white/15 rounded-lg appearance-none cursor-pointer accent-[#F6E05E]"
+                />
+                <div className="flex justify-between text-[10px] text-white/40">
+                  <span>0.0s</span>
+                  <span>{Math.max(0, trimVideoDuration - 3).toFixed(1)}s</span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelTrim}
+                  className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 font-bold transition-all text-xs text-white"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleSaveTrim}
+                  className="flex-1 py-3 rounded-xl bg-[#F6E05E] text-[#1a2f47] font-black hover:scale-103 transition-transform text-xs"
+                >
+                  Pangkas & Simpan
                 </button>
               </div>
             </div>
