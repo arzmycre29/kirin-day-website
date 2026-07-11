@@ -774,16 +774,31 @@ export function MemoryBoothPage() {
     // Canvas stream & recorder setup
     const stream = recordingCanvas.captureStream(30); // 30 fps
     
-    // Choose mimetype prioritizing MP4
+    // Detect Android browser to prioritize WebM for hardware-accelerated mobile encoding,
+    // otherwise prioritize MP4 for Windows, macOS, and iOS
+    const isAndroid = /android/i.test(navigator.userAgent);
+    
     let options: MediaRecorderOptions = {};
-    if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264')) {
-      options = { mimeType: 'video/mp4;codecs=h264' };
-    } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-      options = { mimeType: 'video/mp4' };
-    } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
-      options = { mimeType: 'video/webm;codecs=vp9' };
-    } else if (MediaRecorder.isTypeSupported('video/webm')) {
-      options = { mimeType: 'video/webm' };
+    if (isAndroid) {
+      if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+        options = { mimeType: 'video/webm;codecs=vp9' };
+      } else if (MediaRecorder.isTypeSupported('video/webm')) {
+        options = { mimeType: 'video/webm' };
+      } else if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264')) {
+        options = { mimeType: 'video/mp4;codecs=h264' };
+      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        options = { mimeType: 'video/mp4' };
+      }
+    } else {
+      if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264')) {
+        options = { mimeType: 'video/mp4;codecs=h264' };
+      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        options = { mimeType: 'video/mp4' };
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+        options = { mimeType: 'video/webm;codecs=vp9' };
+      } else if (MediaRecorder.isTypeSupported('video/webm')) {
+        options = { mimeType: 'video/webm' };
+      }
     }
 
     const selectedMime = options.mimeType || 'video/webm';
@@ -1279,8 +1294,8 @@ export function MemoryBoothPage() {
                       onClick={() => setActiveSlotIndex(idx)}
                       onMouseDown={(e) => handleDragStart(e, idx)}
                       onTouchStart={(e) => handleDragStart(e, idx)}
-                      className={`absolute overflow-hidden cursor-move border-2 transition-colors z-10 ${
-                        isCurrent ? 'border-[#F6E05E]' : 'border-transparent'
+                      className={`absolute cursor-move border-2 transition-colors ${
+                        isCurrent ? 'border-[#F6E05E] overflow-visible z-20 shadow-[0_0_15px_rgba(246,224,94,0.3)]' : 'overflow-hidden border-transparent z-10'
                       } ${!state.url ? 'bg-white/5 border-dashed border-white/20 hover:bg-white/10' : ''}`}
                       style={{
                         left: `${pLeft}%`,
