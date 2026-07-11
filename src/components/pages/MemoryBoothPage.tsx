@@ -226,15 +226,6 @@ export function MemoryBoothPage() {
     }
   }, [layout, availableThemes, theme]);
 
-  // Calculate the minimum zoom to fill the slot (like object-cover)
-  const calcAutoFitZoom = (mediaW: number, mediaH: number, slotIdx: number): number => {
-    const slotDef = config.slots[slotIdx];
-    if (!slotDef || !mediaW || !mediaH) return 1.0;
-    const scaleW = slotDef.w / mediaW;
-    const scaleH = slotDef.h / mediaH;
-    return parseFloat(Math.max(scaleW, scaleH).toFixed(3));
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (activeSlotIndex === null || !e.target.files || e.target.files.length === 0) return;
     
@@ -259,7 +250,7 @@ export function MemoryBoothPage() {
       tempVideo.src = fileUrl;
       tempVideo.onloadedmetadata = () => {
         const duration = tempVideo.duration;
-        if (duration > 3.05) { // If video is longer than 3 seconds
+        if (duration > 3.05) {
           setTrimVideoUrl(fileUrl);
           setTrimVideoDuration(duration);
           setTrimStartTime(0);
@@ -267,84 +258,40 @@ export function MemoryBoothPage() {
           setTrimFile(file);
           setTrimModalOpen(true);
         } else {
-          // Video is under 3 seconds, apply directly with auto-fit zoom
-          const fitZoom = calcAutoFitZoom(tempVideo.videoWidth, tempVideo.videoHeight, activeSlotIndex);
           setSlots(prev => prev.map((s, idx) => {
             if (idx === activeSlotIndex) {
               if (s.url) URL.revokeObjectURL(s.url);
-              return {
-                ...s,
-                file,
-                url: fileUrl,
-                type: 'video',
-                startTime: 0,
-                zoom: fitZoom,
-                rotation: 0,
-                offsetX: 0,
-                offsetY: 0
-              };
+              return { ...s, file, url: fileUrl, type: 'video', startTime: 0, zoom: 1.0, rotation: 0, offsetX: 0, offsetY: 0 };
             }
             return s;
           }));
         }
       };
     } else {
-      // Apply photo directly with auto-fit zoom using a temp Image element
-      const img = new Image();
-      img.onload = () => {
-        const fitZoom = calcAutoFitZoom(img.naturalWidth, img.naturalHeight, activeSlotIndex);
-        setSlots(prev => prev.map((s, idx) => {
-          if (idx === activeSlotIndex) {
-            if (s.url) URL.revokeObjectURL(s.url);
-            return {
-              ...s,
-              file,
-              url: fileUrl,
-              type: 'image',
-              zoom: fitZoom,
-              rotation: 0,
-              offsetX: 0,
-              offsetY: 0
-            };
-          }
-          return s;
-        }));
-      };
-      img.src = fileUrl;
+      // Apply photo directly — zoom:1.0 already means object-cover fill in canvas renderer
+      setSlots(prev => prev.map((s, idx) => {
+        if (idx === activeSlotIndex) {
+          if (s.url) URL.revokeObjectURL(s.url);
+          return { ...s, file, url: fileUrl, type: 'image', zoom: 1.0, rotation: 0, offsetX: 0, offsetY: 0 };
+        }
+        return s;
+      }));
     }
   };
 
   const handleSaveTrim = () => {
     if (trimSlotIndex === null || !trimFile || !trimVideoUrl) return;
-    
-    // Create a temp video to measure dimensions for auto-fit zoom
-    const tempV = document.createElement('video');
-    tempV.src = trimVideoUrl;
-    tempV.onloadedmetadata = () => {
-      const fitZoom = calcAutoFitZoom(tempV.videoWidth, tempV.videoHeight, trimSlotIndex);
-      setSlots(prev => prev.map((s, idx) => {
-        if (idx === trimSlotIndex) {
-          if (s.url) URL.revokeObjectURL(s.url);
-          return {
-            ...s,
-            file: trimFile,
-            url: trimVideoUrl,
-            type: 'video',
-            startTime: trimStartTime,
-            zoom: fitZoom,
-            rotation: 0,
-            offsetX: 0,
-            offsetY: 0
-          };
-        }
-        return s;
-      }));
-      setTrimModalOpen(false);
-      setTrimFile(null);
-      setTrimSlotIndex(null);
-    };
-    // Fallback if metadata doesn't fire
-    setTimeout(() => setTrimModalOpen(false), 3000);
+    setSlots(prev => prev.map((s, idx) => {
+      if (idx === trimSlotIndex) {
+        if (s.url) URL.revokeObjectURL(s.url);
+        return { ...s, file: trimFile, url: trimVideoUrl, type: 'video', startTime: trimStartTime, zoom: 1.0, rotation: 0, offsetX: 0, offsetY: 0 };
+      }
+      return s;
+    }));
+    setTrimModalOpen(false);
+    setTrimFile(null);
+    setTrimVideoUrl(null);
+    setTrimSlotIndex(null);
   };
 
   const handleCancelTrim = () => {
@@ -408,19 +355,26 @@ export function MemoryBoothPage() {
   useEffect(() => {
     const handleGlobalMove = (e: MouseEvent | TouchEvent) => {
       if (!isDragging.current || activeSlotIndex === null) return;
-      
+
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
-      const deltaX = clientX - startDragPos.current.x;
-      const deltaY = clientY - startDragPos.current.y;
+      const deltaXScreen = clientX - startDragPos.current.x;
+      const deltaYScreen = clientY - startDragPos.current.y;
+
+      // Convert screen pixel delta → canvas coordinate units so preview matches final output
+      const container = previewContainerRef.current;
+      const containerW = container ? container.clientWidth : config.width;
+      const containerH = container ? container.clientHeight : config.height;
+      const scaleX = config.width / containerW;
+      const scaleY = config.height / containerH;
 
       setSlots(prev => prev.map((s, idx) => {
         if (idx === activeSlotIndex) {
           return {
             ...s,
-            offsetX: startOffset.current.x + deltaX / s.zoom,
-            offsetY: startOffset.current.y + deltaY / s.zoom
+            offsetX: startOffset.current.x + (deltaXScreen * scaleX) / s.zoom,
+            offsetY: startOffset.current.y + (deltaYScreen * scaleY) / s.zoom
           };
         }
         return s;
@@ -1393,16 +1347,13 @@ export function MemoryBoothPage() {
                               playsInline
                               onTimeUpdate={(e) => {
                                 const start = state.startTime || 0;
-                                if (e.currentTarget.currentTime >= start + 2.9) {
-                                  e.currentTarget.currentTime = start;
-                                }
-                                if (e.currentTarget.currentTime < start) {
-                                  e.currentTarget.currentTime = start;
-                                }
+                                if (e.currentTarget.currentTime >= start + 2.9) e.currentTarget.currentTime = start;
+                                if (e.currentTarget.currentTime < start) e.currentTarget.currentTime = start;
                               }}
                               className="w-full h-full object-cover origin-center"
                               style={{
-                                transform: `translate(${state.offsetX}px, ${state.offsetY}px) rotate(${state.rotation}deg) scale(${state.zoom})`,
+                                // offsetX/offsetY are stored in canvas units → convert back to screen px for CSS
+                                transform: `translate(${state.offsetX / (config.width / (previewContainerRef.current?.clientWidth || config.width))}px, ${state.offsetY / (config.height / (previewContainerRef.current?.clientHeight || config.height))}px) rotate(${state.rotation}deg) scale(${state.zoom})`,
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
                               }}
                             />
@@ -1412,7 +1363,8 @@ export function MemoryBoothPage() {
                               alt={`Slot ${idx + 1}`}
                               className="w-full h-full object-cover origin-center"
                               style={{
-                                transform: `translate(${state.offsetX}px, ${state.offsetY}px) rotate(${state.rotation}deg) scale(${state.zoom})`,
+                                // offsetX/offsetY are stored in canvas units → convert back to screen px for CSS
+                                transform: `translate(${state.offsetX / (config.width / (previewContainerRef.current?.clientWidth || config.width))}px, ${state.offsetY / (config.height / (previewContainerRef.current?.clientHeight || config.height))}px) rotate(${state.rotation}deg) scale(${state.zoom})`,
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
                               }}
                             />
@@ -1596,7 +1548,7 @@ export function MemoryBoothPage() {
                         </div>
                         <input
                           type="range"
-                          min="1.0"
+                          min="0.1"
                           max="3.0"
                           step="0.05"
                           value={slots[activeSlotIndex].zoom}
@@ -1625,22 +1577,9 @@ export function MemoryBoothPage() {
                       {/* Reset Transform Button */}
                       <button
                         onClick={() => {
-                          const slotState = slots[activeSlotIndex];
-                          let fitZoom = 1.0;
-                          if (slotState.type === 'image') {
-                            const img = new Image();
-                            img.onload = () => {
-                              fitZoom = calcAutoFitZoom(img.naturalWidth, img.naturalHeight, activeSlotIndex);
-                              updateActiveSlotProperty('zoom', fitZoom);
-                            };
-                            img.src = slotState.url || '';
-                          } else if (slotState.type === 'video') {
-                            const v = videoRefs.current[activeSlotIndex];
-                            if (v) fitZoom = calcAutoFitZoom(v.videoWidth, v.videoHeight, activeSlotIndex);
-                          }
                           setSlots(prev => prev.map((s, idx) =>
                             idx === activeSlotIndex
-                              ? { ...s, zoom: fitZoom, rotation: 0, offsetX: 0, offsetY: 0 }
+                              ? { ...s, zoom: 1.0, rotation: 0, offsetX: 0, offsetY: 0 }
                               : s
                           ));
                         }}
