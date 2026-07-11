@@ -9,6 +9,9 @@ import {
 import default1s from '../../assets/Default - 1s.png';
 import default2s from '../../assets/Default - 2s.png';
 import default4s from '../../assets/Default - 4s.png';
+import storyBg1s from '../../assets/story-bg-1s.png';
+import storyBg2s from '../../assets/story-bg-2s.png';
+import storyBg4s from '../../assets/story-bg-4s.png';
 
 interface SlotData {
   file: File | null;
@@ -73,6 +76,12 @@ const FILTERS = [
   { id: 'cool', name: 'Neon Cyber', css: 'saturate(130%) hue-rotate(180deg) brightness(95%)' },
   { id: 'noir', name: 'Noir', css: 'grayscale(100%) contrast(140%) brightness(90%)' }
 ];
+
+const STORY_PLACEMENTS: Record<'1s' | '2s' | '4s', { bg: string; width: number; x: number; y: number }> = {
+  '1s': { bg: storyBg1s, width: 680, x: 200, y: 280 },
+  '2s': { bg: storyBg2s, width: 620, x: 230, y: 120 },
+  '4s': { bg: storyBg4s, width: 530, x: 54, y: 112 }
+};
 
 // Helper to pre-load image sources as HTMLImageElements
 const loadImage = (src: string): Promise<HTMLImageElement> => {
@@ -181,11 +190,20 @@ export function MemoryBoothPage() {
     fetchContentfulFrames();
   }, []);
 
-  // Merge local themes with Contentful frames
-  const availableThemes = [
-    ...THEMES,
-    ...contentfulFrames.filter(f => f.layout === layout)
-  ];
+  // Keep only Contentful frames, with a fallback to Default White if none exist
+  const availableThemes = contentfulFrames.length > 0
+    ? contentfulFrames.filter(f => f.layout === layout)
+    : [THEMES[0]];
+
+  // Auto-select first theme when layout or availableThemes change
+  useEffect(() => {
+    if (availableThemes.length > 0) {
+      const exists = availableThemes.some(t => t.id === theme);
+      if (!exists) {
+        setTheme(availableThemes[0].id);
+      }
+    }
+  }, [layout, availableThemes, theme]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (activeSlotIndex === null || !e.target.files || e.target.files.length === 0) return;
@@ -555,78 +573,40 @@ export function MemoryBoothPage() {
     return canvas;
   };
 
-  // Compile standard 9:16 Insta Story wrap canvas
-  const compileStoryCanvas = (stripCanvas: HTMLCanvasElement): HTMLCanvasElement => {
+  // Compile standard 9:16 Insta Story wrap canvas (uses the custom uploaded background frames)
+  const compileStoryCanvas = async (stripCanvas: HTMLCanvasElement): Promise<HTMLCanvasElement> => {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
     const ctx = canvas.getContext('2d');
     if (!ctx) return stripCanvas;
 
-    // 1. Draw beautiful Story Background matching the theme
-    const activeTheme = availableThemes.find(t => t.id === theme) || THEMES[0];
-    const isContentfulTheme = activeTheme && 'isContentful' in activeTheme && activeTheme.isContentful;
-
-    if (isContentfulTheme) {
-      ctx.fillStyle = activeTheme.bgColor;
-      ctx.fillRect(0, 0, 1080, 1920);
-    } else if (theme === 'default') {
-      ctx.fillStyle = '#f0f4f8';
-      ctx.fillRect(0, 0, 1080, 1920);
-    } else if (theme === 'filmstrip') {
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(0, 0, 1080, 1920);
-    } else if (theme === 'signature') {
-      const grad = ctx.createLinearGradient(0, 0, 0, 1920);
-      grad.addColorStop(0, '#0f1f33');
-      grad.addColorStop(1, '#1a2f47');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 1080, 1920);
-    } else if (theme === 'blossom') {
-      const grad = ctx.createLinearGradient(0, 0, 0, 1920);
-      grad.addColorStop(0, '#FFE8F3');
-      grad.addColorStop(1, '#E6EFFF');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 1080, 1920);
-    } else if (theme === 'neon') {
-      const grad = ctx.createLinearGradient(0, 0, 0, 1920);
-      grad.addColorStop(0, '#090414');
-      grad.addColorStop(1, '#1b0933');
-      ctx.fillStyle = grad;
+    // 1. Draw the uploaded Story background template image containing logos and text
+    const placement = STORY_PLACEMENTS[layout];
+    try {
+      const bgImg = await loadImage(placement.bg);
+      ctx.drawImage(bgImg, 0, 0, 1080, 1920);
+    } catch (err) {
+      console.error("Failed to load story background image, using fallback beige:", err);
+      ctx.fillStyle = '#dfd9be'; // Fallback sandy beige
       ctx.fillRect(0, 0, 1080, 1920);
     }
 
-    // 2. Draw Strip Canvas Centered & Scaled
+    // 2. Draw Strip Canvas positioned on top
     const stripH = stripCanvas.height;
     const stripW = stripCanvas.width;
+    const scale = placement.width / stripW;
+    const drawW = placement.width;
+    const drawH = stripH * scale;
 
-    if (layout === '2s') {
-      // 2-shot fits 9:16 almost perfectly, draw it centered
-      const drawY = (1920 - stripH) / 2;
-      ctx.drawImage(stripCanvas, 0, drawY);
-    } else if (layout === '1s') {
-      // 1-shot (1107px), center it
-      const drawY = (1920 - stripH) / 2;
-      ctx.drawImage(stripCanvas, 0, drawY);
-    } else if (layout === '4s') {
-      // 4-shot (3456px) needs scaling to fit within 1920px height
-      // Max strip height = 1760px (gives 80px margin top/bottom)
-      const maxH = 1760;
-      const scale = maxH / stripH;
-      const drawW = stripW * scale;
-      const drawH = stripH * scale;
-      const drawX = (1080 - drawW) / 2;
-      const drawY = (1920 - drawH) / 2;
-      
-      // Draw subtle shadow for premium effect
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-      ctx.shadowBlur = 30;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 10;
-      ctx.drawImage(stripCanvas, drawX, drawY, drawW, drawH);
-      ctx.restore();
-    }
+    // Draw subtle shadow for premium 3D overlap effect
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 8;
+    ctx.drawImage(stripCanvas, placement.x, placement.y, drawW, drawH);
+    ctx.restore();
 
     return canvas;
   };
@@ -641,7 +621,7 @@ export function MemoryBoothPage() {
         
         let finalCanvas = stripCanvas;
         if (exportMode === 'story') {
-          finalCanvas = compileStoryCanvas(stripCanvas);
+          finalCanvas = await compileStoryCanvas(stripCanvas);
         }
 
         const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.92);
