@@ -144,9 +144,9 @@ export function MemoryBoothPage() {
   // Load layout configurations
   const config = LAYOUTS[layout];
 
-  // Sync slots size when layout changes
-  useEffect(() => {
-    const slotCount = layout === '1s' ? 1 : layout === '2s' ? 2 : 4;
+  // Helper to initialize or reset slots to their default empty states
+  const initializeSlots = (lay: '1s' | '2s' | '4s') => {
+    const slotCount = lay === '1s' ? 1 : lay === '2s' ? 2 : 4;
     setSlots(
       Array.from({ length: slotCount }, () => ({
         file: null,
@@ -161,6 +161,11 @@ export function MemoryBoothPage() {
       }))
     );
     setActiveSlotIndex(0);
+  };
+
+  // Sync slots size when layout changes
+  useEffect(() => {
+    initializeSlots(layout);
   }, [layout]);
 
   // Clean up Object URLs on unmount
@@ -1068,8 +1073,7 @@ export function MemoryBoothPage() {
     slots.forEach(slot => {
       if (slot.url) URL.revokeObjectURL(slot.url);
     });
-    setSlots([]);
-    setActiveSlotIndex(null);
+    initializeSlots(layout); // Re-initialize default slots immediately
     setGeneratedUrl(null);
     setStep('layout');
   };
