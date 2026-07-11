@@ -18,6 +18,7 @@ import { AdminDashboardPage } from './components/pages/buy/AdminDashboardPage';
 import { AdminCheckInPage } from './components/pages/buy/AdminCheckInPage';
 import { AdminStockPage } from './components/pages/buy/AdminStockPage';
 import { ShopPageBackup } from './components/pages/ShopPageBackup';
+import { MemoryBoothPage } from './components/pages/MemoryBoothPage';
 import { AudioProvider } from './context/AudioContext';
 import { FloatingMusicPlayer } from './components/FloatingMusicPlayer';
 import { PageTransition } from './components/PageTransition';
@@ -60,6 +61,7 @@ export default function App() {
             <Route path="/admin/check-in" element={<PageTransition><AdminCheckInPage /></PageTransition>} />
             <Route path="/admin/stock-setting" element={<PageTransition><AdminStockPage /></PageTransition>} />
             <Route path="/shop-legacy" element={<PageTransition><ShopPageBackup /></PageTransition>} />
+            <Route path="/siyusiyu-kirinday" element={<PageTransition><MemoryBoothPage /></PageTransition>} />
             <Route path="*" element={<PageTransition><HomePage /></PageTransition>} />
           </Routes>
         </AnimatePresence>
