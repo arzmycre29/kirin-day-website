@@ -1319,7 +1319,7 @@ export function MemoryBoothPage() {
 
                       {/* Slot Content */}
                       {state.url ? (
-                        <div className="w-full h-full relative pointer-events-none">
+                        <div className="w-full h-full relative pointer-events-none overflow-hidden">
                           {state.type === 'video' ? (
                             <video 
                               ref={el => { videoRefs.current[idx] = el; }}
@@ -1332,13 +1332,21 @@ export function MemoryBoothPage() {
                                 if (e.currentTarget.currentTime >= start + 2.9) e.currentTarget.currentTime = start;
                                 if (e.currentTarget.currentTime < start) e.currentTarget.currentTime = start;
                               }}
-                              className="w-full h-full object-cover origin-center"
                               style={{
-                                // Convert canvas-unit offsets back to screen px using uniform scale
+                                // Absolute cover sizing: fills slot naturally like object-cover
+                                position: 'absolute',
+                                minWidth: '100%',
+                                minHeight: '100%',
+                                width: 'auto',
+                                height: 'auto',
+                                top: '50%',
+                                left: '50%',
+                                // calc(-50%...) centers the oversized image; adding offset pans the CONTENT
                                 transform: (() => {
-                                  const displayScale = (previewContainerRef.current?.clientWidth || config.width) / config.width;
-                                  return `translate(${state.offsetX * displayScale}px, ${state.offsetY * displayScale}px) rotate(${state.rotation}deg) scale(${state.zoom})`;
+                                  const ds = (previewContainerRef.current?.clientWidth || config.width) / config.width;
+                                  return `translate(calc(-50% + ${state.offsetX * ds}px), calc(-50% + ${state.offsetY * ds}px)) rotate(${state.rotation}deg) scale(${state.zoom})`;
                                 })(),
+                                transformOrigin: 'center center',
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
                               }}
                             />
@@ -1346,13 +1354,21 @@ export function MemoryBoothPage() {
                             <img 
                               src={state.url}
                               alt={`Slot ${idx + 1}`}
-                              className="w-full h-full object-cover origin-center"
                               style={{
-                                // Convert canvas-unit offsets back to screen px using uniform scale
+                                // Absolute cover sizing: fills slot naturally like object-cover
+                                position: 'absolute',
+                                minWidth: '100%',
+                                minHeight: '100%',
+                                width: 'auto',
+                                height: 'auto',
+                                top: '50%',
+                                left: '50%',
+                                // calc(-50%...) centers the oversized image; adding offset pans the CONTENT
                                 transform: (() => {
-                                  const displayScale = (previewContainerRef.current?.clientWidth || config.width) / config.width;
-                                  return `translate(${state.offsetX * displayScale}px, ${state.offsetY * displayScale}px) rotate(${state.rotation}deg) scale(${state.zoom})`;
+                                  const ds = (previewContainerRef.current?.clientWidth || config.width) / config.width;
+                                  return `translate(calc(-50% + ${state.offsetX * ds}px), calc(-50% + ${state.offsetY * ds}px)) rotate(${state.rotation}deg) scale(${state.zoom})`;
                                 })(),
+                                transformOrigin: 'center center',
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
                               }}
                             />
