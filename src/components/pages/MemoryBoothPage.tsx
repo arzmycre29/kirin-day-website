@@ -1247,7 +1247,7 @@ export function MemoryBoothPage() {
           <div className="w-full flex flex-col md:flex-row gap-8 items-start justify-center px-4 animate-fade-in">
             
             {/* Left: Preview Canvas Mockup (Responsive 9:16 layout) */}
-            <div className="w-full md:w-auto flex-shrink-0 flex flex-col items-center justify-center self-center md:self-auto">
+            <div className="w-full md:w-auto flex-shrink-0 flex flex-col items-center justify-center self-center md:self-auto pb-[65vh] md:pb-0">
               <div 
                 ref={previewContainerRef}
                 className={`relative select-none overflow-hidden bg-[#1a2f47] shadow-2xl rounded-2xl border border-white/10 flex flex-col items-center justify-center ${
@@ -1477,8 +1477,20 @@ export function MemoryBoothPage() {
               </span>
             </div>
 
-            {/* Right: Controls & Adjustment Panel */}
-            <div className="flex-grow w-full bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md">
+            {/* Right: Controls & Adjustment Panel — bottom sheet on mobile, sidebar on desktop */}
+            <div className="
+              fixed bottom-0 left-0 right-0 z-40
+              md:static md:z-auto md:flex-grow md:w-full
+              bg-[#0f2236]/95 md:bg-white/5
+              backdrop-blur-xl md:backdrop-blur-md
+              border-t border-white/10 md:border md:rounded-2xl
+              rounded-t-3xl
+              max-h-[65vh] md:max-h-none
+              overflow-y-auto
+              p-4 md:p-6
+            ">
+              {/* Mobile drag handle */}
+              <div className="md:hidden w-10 h-1 bg-white/30 rounded-full mx-auto mb-4" />
               <h3 className="font-black text-xl mb-4 text-[#FFFCE0] flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-[#F6E05E]" /> Edit Strip
               </h3>
