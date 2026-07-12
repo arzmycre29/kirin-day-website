@@ -1543,7 +1543,51 @@ export function MemoryBoothPage() {
                   {/* Media Adjustment Sliders (Only if slot has media) */}
                   {slots[activeSlotIndex].url && (
                     <div className="space-y-5 animate-fade-in">
-                      
+
+                      {/* D-Pad: Directional nudge buttons (mobile-friendly alternative to drag) */}
+                      <div>
+                        <span className="text-xs font-bold text-white/75 block mb-2.5">Geser Posisi</span>
+                        <div className="flex flex-col items-center gap-1">
+                          {/* Up */}
+                          <button
+                            onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetY: s.offsetY - 30 } : s)); }}
+                            className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 active:scale-95 transition-all flex items-center justify-center text-white/80"
+                            aria-label="Geser ke atas"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3L13 10H3L8 3Z" fill="currentColor"/></svg>
+                          </button>
+                          {/* Left · Center · Right */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetX: s.offsetX - 30 } : s)); }}
+                              className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 active:scale-95 transition-all flex items-center justify-center text-white/80"
+                              aria-label="Geser ke kiri"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L10 3V13L3 8Z" fill="currentColor"/></svg>
+                            </button>
+                            {/* Center dot */}
+                            <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center">
+                              <div className="w-2 h-2 rounded-full bg-white/20" />
+                            </div>
+                            <button
+                              onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetX: s.offsetX + 30 } : s)); }}
+                              className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 active:scale-95 transition-all flex items-center justify-center text-white/80"
+                              aria-label="Geser ke kanan"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 8L6 3V13L13 8Z" fill="currentColor"/></svg>
+                            </button>
+                          </div>
+                          {/* Down */}
+                          <button
+                            onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetY: s.offsetY + 30 } : s)); }}
+                            className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 active:scale-95 transition-all flex items-center justify-center text-white/80"
+                            aria-label="Geser ke bawah"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13L3 6H13L8 13Z" fill="currentColor"/></svg>
+                          </button>
+                        </div>
+                      </div>
+
                       {/* Zoom Slider */}
                       <div>
                         <div className="flex items-center justify-between text-xs mb-2">
