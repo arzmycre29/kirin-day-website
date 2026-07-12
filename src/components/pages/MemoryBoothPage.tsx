@@ -1244,10 +1244,10 @@ export function MemoryBoothPage() {
 
         {/* 4. WORKSPACE STEP */}
         {step === 'workspace' && (
-          <div className="w-full flex flex-col md:flex-row gap-4 md:gap-8 items-start justify-center px-4 animate-fade-in" style={{ maxHeight: 'calc(100dvh - 80px)' }}>
+          <div className="w-full flex flex-col md:flex-row gap-8 items-start justify-center px-4 animate-fade-in">
             
-            {/* Left: Preview Canvas (fixed compact height on mobile) */}
-            <div className="w-full md:w-auto flex-shrink-0 flex flex-col items-center justify-center md:self-auto" style={{ maxHeight: '45dvh' }} >
+            {/* Left: Preview Canvas Mockup (Responsive 9:16 layout) */}
+            <div className="w-full md:w-auto flex-shrink-0 flex flex-col items-center justify-center self-center md:self-auto">
               <div 
                 ref={previewContainerRef}
                 className={`relative select-none overflow-hidden bg-[#1a2f47] shadow-2xl rounded-2xl border border-white/10 flex flex-col items-center justify-center ${
@@ -1478,7 +1478,7 @@ export function MemoryBoothPage() {
             </div>
 
             {/* Right: Controls & Adjustment Panel */}
-            <div className="flex-grow w-full bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6 backdrop-blur-md overflow-y-auto md:max-h-none" style={{ maxHeight: '55dvh' }}>
+            <div className="flex-grow w-full bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md">
               <h3 className="font-black text-xl mb-4 text-[#FFFCE0] flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-[#F6E05E]" /> Edit Strip
               </h3>
@@ -1502,36 +1502,88 @@ export function MemoryBoothPage() {
 
               {/* Media Loader */}
               {activeSlotIndex !== null && (
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  
+                  {/* Upload action */}
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-5 flex flex-col items-center justify-center text-center">
+                    {slots[activeSlotIndex].url ? (
+                      <div className="flex items-center gap-3 w-full justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-10 h-10 rounded bg-white/10 overflow-hidden border border-white/10">
+                            {slots[activeSlotIndex].type === 'video' ? (
+                              <div className="w-full h-full flex items-center justify-center text-[#90CDF4]"><Video className="w-5 h-5" /></div>
+                            ) : (
+                              <img src={slots[activeSlotIndex].url || ''} className="w-full h-full object-cover" />
+                            )}
+                          </div>
+                          <div className="text-left">
+                            <span className="text-xs text-white/50 block">File Terunggah</span>
+                            <span className="text-sm font-bold truncate max-w-[120px] block">{slots[activeSlotIndex].file?.name || 'File media'}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => triggerFileInput(activeSlotIndex)}
+                          className="px-4 py-2 rounded-lg bg-white/10 text-xs font-bold hover:bg-white/15 transition-all"
+                        >
+                          Ganti File
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => triggerFileInput(activeSlotIndex)}
+                        className="w-full py-6 flex flex-col items-center justify-center gap-2 hover:bg-white/5 transition-all text-white/70"
+                      >
+                        <Upload className="w-6 h-6 text-[#F6E05E]" />
+                        <span className="text-xs font-bold tracking-wider">UNGGAH {mediaMode.toUpperCase()} BARU</span>
+                        <span className="text-[10px] text-white/40">Mendukung {mediaMode === 'video' ? 'MP4, WebM, MOV' : 'JPG, PNG, WebP'}</span>
+                      </button>
+                    )}
+                  </div>
 
-                  {/* Media Adjustments — shown first so mobile sees controls immediately */}
+                  {/* Media Adjustment Sliders (Only if slot has media) */}
                   {slots[activeSlotIndex].url && (
-                    <div className="space-y-4 animate-fade-in">
+                    <div className="space-y-5 animate-fade-in">
 
-                      {/* Compact D-Pad inline with label */}
-                      <div className="flex items-center gap-4">
-                        <span className="text-xs font-bold text-white/75 shrink-0">Geser Posisi</span>
-                        <div className="flex flex-col items-center gap-0.5">
-                          <button onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetY: s.offsetY - 30 } : s)); }}
-                            className="w-8 h-8 rounded-lg bg-white/8 border border-white/10 hover:bg-white/15 active:scale-90 transition-all flex items-center justify-center text-white/80" aria-label="Atas">
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3L13 10H3L8 3Z" fill="currentColor"/></svg>
+                      {/* D-Pad: Directional nudge buttons (mobile-friendly alternative to drag) */}
+                      <div>
+                        <span className="text-xs font-bold text-white/75 block mb-2.5">Geser Posisi</span>
+                        <div className="flex flex-col items-center gap-1">
+                          {/* Up */}
+                          <button
+                            onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetY: s.offsetY - 30 } : s)); }}
+                            className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 active:scale-95 transition-all flex items-center justify-center text-white/80"
+                            aria-label="Geser ke atas"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3L13 10H3L8 3Z" fill="currentColor"/></svg>
                           </button>
-                          <div className="flex items-center gap-0.5">
-                            <button onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetX: s.offsetX - 30 } : s)); }}
-                              className="w-8 h-8 rounded-lg bg-white/8 border border-white/10 hover:bg-white/15 active:scale-90 transition-all flex items-center justify-center text-white/80" aria-label="Kiri">
-                              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 8L10 3V13L3 8Z" fill="currentColor"/></svg>
+                          {/* Left · Center · Right */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetX: s.offsetX - 30 } : s)); }}
+                              className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 active:scale-95 transition-all flex items-center justify-center text-white/80"
+                              aria-label="Geser ke kiri"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L10 3V13L3 8Z" fill="currentColor"/></svg>
                             </button>
-                            <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center">
-                              <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                            {/* Center dot */}
+                            <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center">
+                              <div className="w-2 h-2 rounded-full bg-white/20" />
                             </div>
-                            <button onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetX: s.offsetX + 30 } : s)); }}
-                              className="w-8 h-8 rounded-lg bg-white/8 border border-white/10 hover:bg-white/15 active:scale-90 transition-all flex items-center justify-center text-white/80" aria-label="Kanan">
-                              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M13 8L6 3V13L13 8Z" fill="currentColor"/></svg>
+                            <button
+                              onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetX: s.offsetX + 30 } : s)); }}
+                              className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 active:scale-95 transition-all flex items-center justify-center text-white/80"
+                              aria-label="Geser ke kanan"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 8L6 3V13L13 8Z" fill="currentColor"/></svg>
                             </button>
                           </div>
-                          <button onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetY: s.offsetY + 30 } : s)); }}
-                            className="w-8 h-8 rounded-lg bg-white/8 border border-white/10 hover:bg-white/15 active:scale-90 transition-all flex items-center justify-center text-white/80" aria-label="Bawah">
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 13L3 6H13L8 13Z" fill="currentColor"/></svg>
+                          {/* Down */}
+                          <button
+                            onPointerDown={(e) => { e.stopPropagation(); setSlots(prev => prev.map((s, i) => i === activeSlotIndex ? { ...s, offsetY: s.offsetY + 30 } : s)); }}
+                            className="w-10 h-10 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 active:scale-95 transition-all flex items-center justify-center text-white/80"
+                            aria-label="Geser ke bawah"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13L3 6H13L8 13Z" fill="currentColor"/></svg>
                           </button>
                         </div>
                       </div>
@@ -1609,37 +1661,10 @@ export function MemoryBoothPage() {
 
                   <hr className="border-white/10" />
 
-                  {/* Upload / File info card — placed at bottom for mobile-first layout */}
-                  <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex flex-col items-center justify-center text-center">
-                    {slots[activeSlotIndex].url ? (
-                      <div className="flex items-center gap-3 w-full justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded bg-white/10 overflow-hidden border border-white/10 shrink-0">
-                            {slots[activeSlotIndex].type === 'video' ? (
-                              <div className="w-full h-full flex items-center justify-center text-[#90CDF4]"><Video className="w-4 h-4" /></div>
-                            ) : (
-                              <img src={slots[activeSlotIndex].url || ''} className="w-full h-full object-cover" alt="thumb" />
-                            )}
-                          </div>
-                          <span className="text-xs font-bold truncate max-w-[140px]">{slots[activeSlotIndex].file?.name || 'File media'}</span>
-                        </div>
-                        <button onClick={() => triggerFileInput(activeSlotIndex)}
-                          className="px-3 py-1.5 rounded-lg bg-white/10 text-xs font-bold hover:bg-white/15 transition-all shrink-0">
-                          Ganti File
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={() => triggerFileInput(activeSlotIndex)}
-                        className="w-full py-4 flex flex-col items-center justify-center gap-1.5 hover:bg-white/5 transition-all text-white/70">
-                        <Upload className="w-5 h-5 text-[#F6E05E]" />
-                        <span className="text-xs font-bold tracking-wider">UNGGAH {mediaMode.toUpperCase()}</span>
-                        <span className="text-[10px] text-white/40">Mendukung {mediaMode === 'video' ? 'MP4, WebM, MOV' : 'JPG, PNG, WebP'}</span>
-                      </button>
-                    )}
-                  </div>
+                  {/* Text customization removed per user request */}
 
-                  {/* Generate button */}
-                  <div>
+                  {/* Complete Workspace generate actions */}
+                  <div className="pt-4">
                     <button
                       disabled={!isWorkspaceComplete}
                       onClick={() => setShowConfirmModal(true)}
