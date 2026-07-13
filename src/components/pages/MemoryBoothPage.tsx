@@ -1333,19 +1333,16 @@ export function MemoryBoothPage() {
                                 if (e.currentTarget.currentTime < start) e.currentTarget.currentTime = start;
                               }}
                               style={{
-                                // Absolute cover sizing: fills slot naturally like object-cover
-                                position: 'absolute',
-                                minWidth: '100%',
-                                minHeight: '100%',
-                                width: 'auto',
-                                height: 'auto',
-                                top: '50%',
-                                left: '50%',
-                                // calc(-50%...) centers the oversized image; adding offset pans the CONTENT
-                                transform: (() => {
+                                // object-fit: cover reliably scales to fill slot without squeezing
+                                // object-position pans the image CONTENT (not the element) → no white reveal
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                objectPosition: (() => {
                                   const ds = (previewContainerRef.current?.clientWidth || config.width) / config.width;
-                                  return `translate(calc(-50% + ${state.offsetX * ds}px), calc(-50% + ${state.offsetY * ds}px)) rotate(${state.rotation}deg) scale(${state.zoom})`;
+                                  return `calc(50% + ${state.offsetX * ds}px) calc(50% + ${state.offsetY * ds}px)`;
                                 })(),
+                                transform: `scale(${state.zoom}) rotate(${state.rotation}deg)`,
                                 transformOrigin: 'center center',
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
                               }}
@@ -1355,19 +1352,16 @@ export function MemoryBoothPage() {
                               src={state.url}
                               alt={`Slot ${idx + 1}`}
                               style={{
-                                // Absolute cover sizing: fills slot naturally like object-cover
-                                position: 'absolute',
-                                minWidth: '100%',
-                                minHeight: '100%',
-                                width: 'auto',
-                                height: 'auto',
-                                top: '50%',
-                                left: '50%',
-                                // calc(-50%...) centers the oversized image; adding offset pans the CONTENT
-                                transform: (() => {
+                                // object-fit: cover reliably scales to fill slot without squeezing
+                                // object-position pans the image CONTENT (not the element) → no white reveal
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                objectPosition: (() => {
                                   const ds = (previewContainerRef.current?.clientWidth || config.width) / config.width;
-                                  return `translate(calc(-50% + ${state.offsetX * ds}px), calc(-50% + ${state.offsetY * ds}px)) rotate(${state.rotation}deg) scale(${state.zoom})`;
+                                  return `calc(50% + ${state.offsetX * ds}px) calc(50% + ${state.offsetY * ds}px)`;
                                 })(),
+                                transform: `scale(${state.zoom}) rotate(${state.rotation}deg)`,
                                 transformOrigin: 'center center',
                                 filter: FILTERS.find(f => f.id === state.filter)?.css || 'none'
                               }}
