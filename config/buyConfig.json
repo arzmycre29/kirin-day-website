@@ -16,9 +16,9 @@
     { "id": "poster", "name": "Signed A2 Debut Poster", "price": 30000, "photoUrl": "https://images.unsplash.com/photo-1580136579312-94651dfd596d?w=400&fit=crop&q=80", "stock": 15, "isActive": false }
   ],
   "chekiPrices": {
-    "twoShot": 75000,
-    "solo": 50000,
-    "group": 120000
+    "twoShot": 35000,
+    "solo": 35000,
+    "group": 100000
   },
   "chekiTypes": ["Two Shot", "Solo", "Group"],
   "maxChekiPerMemberPerType": 10,

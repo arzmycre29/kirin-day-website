@@ -227,8 +227,8 @@ app.post('/api/orders', orderSubmitLimiter, upload.single('paymentProof'), async
       return res.status(400).json({ error: "Metode pengambilan tidak valid." });
     }
 
-    // Validate payment method enum against configured payment methods
-    const allowedPaymentMethods = buyConfig.paymentMethods.map(p => p.id);
+    // Validate payment method enum against configured payment methods (accepting either id or type)
+    const allowedPaymentMethods = buyConfig.paymentMethods.flatMap(p => [p.id, p.type]);
     if (!allowedPaymentMethods.includes(payment_method)) {
       return res.status(400).json({ error: "Metode pembayaran tidak valid." });
     }
@@ -705,10 +705,11 @@ app.post('/api/orders/ots', adminAuth, async (req, res) => {
       if (!item.quantity || !Number.isInteger(item.quantity) || item.quantity <= 0) {
         return res.status(400).json({ error: "Kuantitas Cheki harus berupa bilangan bulat positif." });
       }
-      const officialPrice = getChekiPrice(item.type);
-      if (officialPrice === 0) {
+      const basePrice = getChekiPrice(item.type);
+      if (basePrice === 0) {
         return res.status(400).json({ error: `Tipe Cheki tidak dikenal: ${item.type}` });
       }
+      const officialPrice = basePrice + 5000;
       item.unit_price = officialPrice;
       item.subtotal = item.quantity * officialPrice;
     }
